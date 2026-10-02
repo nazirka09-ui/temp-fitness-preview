@@ -135,11 +135,10 @@ function renderWorkouts() {
 function sessionRow(session, removable) {
   const details = element("details", "session-row");
   const summary = element("summary", "session-summary");
-  const icon = element("span", "row-icon", isRun(session) ? "◉" : "▥");
   const title = element("span", "session-row-title");
   title.append(element("strong", "", session.title), element("small", "", `${formatDate(session.date)} · ${session.status === "active" ? "идёт сейчас" : session.activity}`));
   const setCount = session.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0);
-  summary.append(icon, title, element("b", "", `${setCount} подх.`));
+  summary.append(title, element("b", "", `${setCount} подх.`));
   details.append(summary);
   const body = element("div", "session-row-details");
   if (!session.exercises.length) body.append(element("p", "form-help", "Упражнения пока не добавлены."));
@@ -241,7 +240,7 @@ function exerciseCard(session, exercise) {
   const title = element("div");
   title.append(element("h4", "", exercise.name), element("span", "exercise-group-tag", exercise.group || inferGroup(exercise.name)));
   top.append(title);
-  const historyButton = element("button", "text-button", "История ↗");
+  const historyButton = element("button", "text-button", "История");
   historyButton.type = "button";
   historyButton.addEventListener("click", () => openExercise(exercise.name));
   top.append(historyButton);
@@ -421,7 +420,7 @@ function renderProgress() {
     const info = element("span", "progress-info");
     info.append(element("strong", "", name), element("span", "", prior ? `${formatDate(prior.date)} → ${formatDate(latest.date)}` : "Первая запись"));
     const change = prior && latest.topWeight && prior.topWeight ? latest.topWeight === prior.topWeight && latest.repsAtTopWeight > prior.repsAtTopWeight ? `+${latest.repsAtTopWeight - prior.repsAtTopWeight} повт.` : `${latest.topWeight > prior.topWeight ? "+" : ""}${formatNumber(latest.topWeight - prior.topWeight)} кг` : `${history.length} зан.`;
-    row.append(info, element("b", latest.topWeight > (prior?.topWeight || 0) && prior ? "progress-positive" : "", change), element("span", "", "↗"));
+    row.append(info, element("b", latest.topWeight > (prior?.topWeight || 0) && prior ? "progress-positive" : "", change));
     row.addEventListener("click", () => openExercise(name));
     return row;
   }));
@@ -477,7 +476,7 @@ function renderOverview() {
   if (current) {
     const count = current.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0);
     target.append(element("h3", "", `Сейчас идёт: ${current.title}`), element("p", "", `Записано ${count} ${setWord(count)}.`));
-    const link = element("a", "button button-dark today-action", "Продолжить тренировку ↗"); link.href = "#workout-live"; target.append(link);
+    const link = element("a", "button button-dark today-action", "Продолжить тренировку"); link.href = "#workout-live"; target.append(link);
     return;
   }
   const byTemplate = new Map();
@@ -494,7 +493,7 @@ function renderOverview() {
     const goal = suggestedGoal(exerciseHistory(data.sessions, withGoal.name));
     target.append(element("p", "today-goal", `Ориентир для ${withGoal.name}: ${setText(goal, candidate.activity === "Бег")}.`));
   }
-  const button = element("button", "button button-dark today-action", distance <= 1 ? "Посмотреть тренировки ↗" : "Выбрать тренировку ↗");
+  const button = element("button", "button button-dark today-action", distance <= 1 ? "Посмотреть тренировки" : "Выбрать тренировку");
   button.type = "button";
   button.addEventListener("click", () => distance <= 1 ? location.hash = "#training" : openFlow(focusGroup(candidate)));
   target.append(button);
@@ -518,7 +517,6 @@ function renderFood() {
   if (!selectedFood.length) { empty(list, "За эту дату записей пока нет."); return; }
   list.replaceChildren(...selectedFood.map(item => {
     const row = element("div", "log-row");
-    const icon = element("div", "row-icon food-icon", "◉");
     const body = element("div", "row-body");
     body.append(element("strong", "", item.name), element("span", "", `Б ${formatNumber(item.protein)} · Ж ${formatNumber(item.fat)} · У ${formatNumber(item.carbs)} г`));
     const metric = element("div", "row-metric", `${formatNumber(item.calories)} ккал`);
@@ -526,7 +524,7 @@ function renderFood() {
     button.type = "button";
     button.setAttribute("aria-label", `Удалить запись: ${item.name}`);
     button.addEventListener("click", () => { data.food = data.food.filter(record => record.id !== item.id); save(); render(); });
-    row.append(icon, body, metric, button);
+    row.append(body, metric, button);
     return row;
   }));
 }
@@ -579,11 +577,11 @@ function renderHero() {
   const repeat = current ? null : repeatCandidate();
   const genitive = { "Грудь": "груди", "Спина": "спины", "Ноги": "ног", "Плечи": "плеч", "Руки": "рук", "Всё тело": "всего тела", "Своя тренировка": "свою тренировку" };
   const label = current ? "Продолжить тренировку" : repeat ? focusGroup(repeat) === "Своя тренировка" ? "Повторить последнюю тренировку" : `Повторить последнюю тренировку ${genitive[focusGroup(repeat)]}` : "Начать тренировку";
-  button.replaceChildren(document.createTextNode(`${label} `), element("span", "", "↗"));
+  button.replaceChildren(document.createTextNode(`${label} `));
   button.href = current ? "#workout-live" : repeat ? "#workout-live" : "#workout-flow";
   secondary.hidden = !repeat;
   const trainingButton = document.querySelector("#training-start");
-  trainingButton.replaceChildren(document.createTextNode(current ? "Продолжить тренировку " : "Начать тренировку "), element("span", "", "↗"));
+  trainingButton.replaceChildren(document.createTextNode(current ? "Продолжить тренировку " : "Начать тренировку "));
 }
 function openFlow(group = null) {
   if (activeSession()) { location.hash = "#workout-live"; return; }
@@ -636,8 +634,8 @@ function renderFlow() {
   const next = document.querySelector("#flow-next");
   document.querySelector("#flow-counter").textContent = `Шаг ${flowDraft.step} из 3`;
   document.querySelector("#flow-progress-fill").style.width = `${flowDraft.step / 3 * 100}%`;
-  document.querySelector("#flow-back").textContent = flowDraft.step === 1 ? "← К обзору" : "← Назад";
-  next.replaceChildren(document.createTextNode(flowDraft.step === 3 ? "Начать тренировку " : "Далее "), element("span", "", "↗"));
+  document.querySelector("#flow-back").textContent = flowDraft.step === 1 ? "К обзору" : "Назад";
+  next.replaceChildren(document.createTextNode(flowDraft.step === 3 ? "Начать тренировку " : "Далее "));
   next.disabled = flowDraft.step === 1 ? !flowDraft.group : flowDraft.exercises.length === 0 || !flowDraft.title.trim();
   target.replaceChildren();
   if (flowDraft.step === 1) {
@@ -832,7 +830,7 @@ function updateRecordedFields() {
       row.querySelector(".record-effort").hidden = running;
       row.querySelector(".record-remove-set").disabled = rows.length === 1;
     });
-    card.querySelector(".record-add-set").textContent = running ? "＋ Добавить отрезок" : "＋ Добавить подход";
+    card.querySelector(".record-add-set").textContent = running ? "Добавить отрезок" : "Добавить подход";
   });
 }
 function addRecordedExercise() {
@@ -855,7 +853,7 @@ function addRecordedExercise() {
   });
   details.append(nameLabel, groupLabel);
   const rows = element("div", "record-sets");
-  const add = element("button", "small-button record-add-set", "＋ Добавить подход"); add.type = "button";
+  const add = element("button", "small-button record-add-set", "Добавить подход"); add.type = "button";
   add.addEventListener("click", () => {
     const last = rows.lastElementChild;
     addRecordedSet(card, last ? { weight: last.querySelector('[name="weight"]').value, reps: last.querySelector('[name="reps"]').value } : null);
@@ -923,7 +921,7 @@ function renderLive() {
   for (const [index, exercise] of session.exercises.entries()) {
     const button = element("button", `live-exercise-tab${session.currentExerciseId === exercise.id ? " active" : ""}`, `${index + 1}. ${exercise.name}`);
     button.type = "button";
-    button.append(element("small", "", exercise.completed ? "Завершено ✓" : `${exercise.sets.length}/${exercise.plannedSets || 3}`));
+    button.append(element("small", "", exercise.completed ? "Завершено" : `${exercise.sets.length}/${exercise.plannedSets || 3}`));
     button.addEventListener("click", () => { if (liveRest) skipLiveRest(); session.currentExerciseId = exercise.id; save(); renderLive(); });
     nav.append(button);
   }
@@ -942,7 +940,7 @@ function renderLive() {
   if (prior) target.append(element("p", "live-previous", `Прошлый раз: ${setText(prior, isRun(session))}`));
   if (goal && prior?.weight > 0 && !isRun(session)) target.append(element("p", "live-goal", `Ориентир сегодня: ${goalLabel(goal)}. Можно изменить.`));
   const completed = element("div", "live-completed");
-  exercise.sets.forEach((set, index) => completed.append(element("div", "live-set-done", `${index + 1}. ${setText(set, isRun(session))}${set.note ? ` · ${set.note}` : ""} ✓`)));
+  exercise.sets.forEach((set, index) => completed.append(element("div", "live-set-done", `${index + 1}. ${setText(set, isRun(session))}${set.note ? ` · ${set.note}` : ""}`)));
   target.append(completed);
   const rest = element("div", "live-rest"); rest.id = "live-rest";
   rest.innerHTML = '<div class="eyebrow">МЕЖДУ ПОДХОДАМИ</div><h4>Отдых</h4><div class="live-rest-time" data-rest-time role="timer">01:30</div><div class="live-rest-actions"><button type="button" data-rest-pause>Пауза</button><button type="button" data-rest-skip>Пропустить</button><button type="button" data-rest-add>+30 секунд</button></div>';
@@ -989,7 +987,7 @@ function renderLive() {
     ? `Все подходы сделаны? Дальше: ${next.name}.`
     : "Все подходы сделаны? Заверши тренировку и посмотри результат."));
   const button = element("button", "live-next", next
-    ? "Завершить упражнение → Следующее"
+    ? "Завершить и перейти к следующему"
     : "Завершить упражнение и тренировку");
   button.type = "button";
   button.addEventListener("click", () => {
@@ -1052,7 +1050,7 @@ function renderResult() {
   if (summary.records) target.append(element("p", "result-records", `${summary.records} ${recordPhrase(summary.records)}`));
   if (summary.volumeChange > 0) target.append(element("p", "result-volume", `Общий объём тренировки: +${summary.volumeChange}% к прошлому такому занятию.`));
   const actions = element("div", "result-actions");
-  const overview = element("a", "button button-dark", "К обзору ↗"); overview.href = "#overview";
+  const overview = element("a", "button button-dark", "К обзору"); overview.href = "#overview";
   const history = element("a", "small-button", "История тренировок"); history.href = "#training";
   actions.append(overview, history); target.append(actions);
 }
@@ -1086,6 +1084,22 @@ function navigate() {
   window.scrollTo(0, 0);
 }
 
+
+function initTheme() {
+  const root = document.documentElement;
+  const buttons = document.querySelectorAll("[data-theme-choice]");
+  function apply(theme) {
+    root.dataset.theme = theme;
+    buttons.forEach(button => button.setAttribute("aria-pressed", String(button.dataset.themeChoice === theme)));
+    document.querySelector('meta[name="theme-color"]').content = theme === "dark" ? "#101714" : "#f5f5f0";
+  }
+  apply(root.dataset.theme === "dark" ? "dark" : "light");
+  buttons.forEach(button => button.addEventListener("click", () => {
+    apply(button.dataset.themeChoice);
+    try { localStorage.setItem("temp-theme-v1", button.dataset.themeChoice); } catch {}
+  }));
+}
+initTheme();
 document.querySelector("#today-label").textContent = new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
 document.querySelector("#workout-date").value = today();
 document.querySelector("#food-date").value = today();
