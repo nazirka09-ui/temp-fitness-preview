@@ -803,7 +803,7 @@ function renderLive() {
   for (const [index, exercise] of session.exercises.entries()) {
     const button = element("button", `live-exercise-tab${session.currentExerciseId === exercise.id ? " active" : ""}`, `${index + 1}. ${exercise.name}`);
     button.type = "button";
-    button.append(element("small", "", `${exercise.sets.length}/${exercise.plannedSets || 3}`));
+    button.append(element("small", "", exercise.completed ? "Завершено ✓" : `${exercise.sets.length}/${exercise.plannedSets || 3}`));
     button.addEventListener("click", () => { if (liveRest) skipLiveRest(); session.currentExerciseId = exercise.id; save(); renderLive(); });
     nav.append(button);
   }
@@ -862,19 +862,37 @@ function renderLive() {
     save(); render(); startLiveRest(session);
   });
   target.append(form);
-  const next = session.exercises[currentIndex + 1];
-  if (next) {
-    const button = element("button", "live-next", `Следующее упражнение: ${next.name} →`);
-    button.type = "button";
-    button.addEventListener("click", () => { if (liveRest) skipLiveRest(); session.currentExerciseId = next.id; save(); renderLive(); });
-    target.append(button);
-  }
+  const next = session.exercises.slice(currentIndex + 1).find(item => !item.completed)
+    || session.exercises.find(item => item.id !== exercise.id && !item.completed);
+  const actions = element("div", "live-exercise-actions");
+  actions.append(element("p", "live-previous", next
+    ? `Все подходы сделаны? Дальше: ${next.name}.`
+    : "Все подходы сделаны? Заверши тренировку и посмотри результат."));
+  const button = element("button", "live-next", next
+    ? "Завершить упражнение → Следующее"
+    : "Завершить упражнение и тренировку");
+  button.type = "button";
+  button.addEventListener("click", () => {
+    if (!next) {
+      document.querySelector("#live-confirm").hidden = false;
+      document.querySelector("#live-confirm-cancel").focus();
+      return;
+    }
+    exercise.completed = true;
+    if (liveRest) skipLiveRest();
+    session.currentExerciseId = next.id;
+    save(); renderLive();
+    window.scrollTo(0, 0);
+  });
+  actions.append(button);
+  target.insertBefore(actions, rest);
   renderLiveRest();
 }
 function finishLiveWorkout() {
   const session = liveSession();
   if (!session) return;
   document.querySelector("#live-confirm").hidden = true;
+  session.exercises.forEach(exercise => { exercise.completed = true; });
   session.status = "done";
   session.completedAt = Date.now();
   resultSessionId = session.id;
