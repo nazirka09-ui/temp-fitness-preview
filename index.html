@@ -43,27 +43,20 @@
           </div>
           <div class="two-column">
             <article class="panel"><div class="panel-head"><div><div class="eyebrow">ИСТОРИЯ</div><h3>Последние тренировки</h3></div><a href="#training">Все записи ↗</a></div><div id="recent-workouts" class="empty-state">Пока нет записей. Начни с первой тренировки.</div></article>
-            <article class="panel idea-panel"><div class="eyebrow">НАПОМИНАНИЕ</div><div class="quote-mark">“</div><p>Прогресс — это не идеальная неделя, а привычка возвращаться к движению.</p><span>СЕГОДНЯ — ХОРОШИЙ ДЕНЬ, ЧТОБЫ НАЧАТЬ</span></article>
+            <article class="panel timer-panel"><div class="eyebrow">МЕЖДУ ПОДХОДАМИ</div><h3>Время отдохнуть</h3><div class="timer-display" data-timer-display role="timer" aria-label="Оставшееся время отдыха">02:00</div><p data-timer-status>Выбери время и запусти таймер.</p><div class="timer-actions"><button type="button" data-timer-start="60">1 мин</button><button type="button" data-timer-start="120" class="selected">2 мин</button><button type="button" data-timer-start="180">3 мин</button><button type="button" data-timer-stop>Сбросить</button></div></article>
           </div>
         </section>
 
         <section class="page" id="training" aria-label="Тренировки">
-          <div class="page-intro"><div><div class="eyebrow">ТВОЙ ДНЕВНИК</div><h2>Каждый подход<br />имеет значение.</h2><p>Записывай упражнения, веса и повторения. История поможет увидеть реальный рост.</p></div><div class="intro-badge">01 / ДВИЖЕНИЕ</div></div>
+          <div class="page-intro"><div><div class="eyebrow">ТВОЙ ДНЕВНИК</div><h2>Каждый подход<br />имеет значение.</h2><p>Выбери готовый день или создай свой. Во время занятия записывай подходы за пару касаний.</p></div><div class="intro-badge">01 / ДВИЖЕНИЕ</div></div>
+          <section class="panel template-panel"><div class="panel-head"><div><div class="eyebrow">ГОТОВЫЕ ДНИ</div><h3>Шаблоны тренировок</h3></div></div><div id="template-list" class="template-grid"></div></section>
           <div class="two-column training-layout">
-            <section class="panel form-panel"><div class="panel-head"><div><div class="eyebrow">НОВАЯ ЗАПИСЬ</div><h3>Добавить подход</h3></div></div>
-              <form id="workout-form">
-                <label>Дата <input id="workout-date" name="date" type="date" required /></label>
-                <label>Вид активности <select name="activity" required><option value="Силовая">Силовая</option><option value="Кроссфит">Кроссфит</option><option value="Бег">Бег</option><option value="Другая">Другая</option></select></label>
-                <label>Упражнение или активность <input name="exercise" type="text" maxlength="80" placeholder="Например, жим лёжа или бег" required /></label>
-                <div class="form-row"><label>Вес, кг <input name="weight" type="number" min="0" max="1000" step="0.5" placeholder="0" /></label><label>Повторения / минуты <input name="reps" type="number" min="1" max="10000" step="1" placeholder="10" required /></label></div>
-                <label>Заметка <input name="note" type="text" maxlength="160" placeholder="Самочувствие, темп, техника…" /></label>
-                <button class="button button-dark" type="submit">Сохранить подход <span>↗</span></button>
-                <p class="form-help">Для бега укажи минуты вместо повторений, вес оставь пустым.</p>
-              </form>
-            </section>
-            <section class="panel log-panel"><div class="panel-head"><div><div class="eyebrow">ТВОЙ ПУТЬ</div><h3>История подходов</h3></div><span class="count-badge" id="workout-count">0 записей</span></div><div id="workout-list" class="empty-state">Здесь появятся твои тренировки.</div></section>
+            <section class="panel form-panel"><div class="panel-head"><div><div class="eyebrow">ПОДГОТОВКА</div><h3>Начать занятие</h3></div></div><form id="session-form"><label>Название тренировки <input name="title" type="text" maxlength="80" placeholder="Например, день ног" required /></label><div class="form-row"><label>Дата <input id="workout-date" name="date" type="date" required /></label><label>Вид активности <select name="activity"><option value="Силовая">Силовая</option><option value="Кроссфит">Кроссфит</option><option value="Бег">Бег</option><option value="Другая">Другая</option></select></label></div><button class="button button-dark" type="submit">Начать тренировку <span>↗</span></button><p class="form-help">Выбранный шаблон подскажет упражнения. Их можно менять и дополнять.</p></form></section>
+            <section class="panel timer-panel training-timer"><div class="eyebrow">МЕЖДУ ПОДХОДАМИ</div><h3>Таймер отдыха</h3><div class="timer-display" data-timer-display role="timer" aria-label="Оставшееся время отдыха">02:00</div><p data-timer-status>Выбери время и запусти таймер.</p><div class="timer-actions"><button type="button" data-timer-start="60">1 мин</button><button type="button" data-timer-start="120" class="selected">2 мин</button><button type="button" data-timer-start="180">3 мин</button><button type="button" data-timer-stop>Сбросить</button></div></section>
           </div>
-          <section class="panel progress-panel"><div class="panel-head"><div><div class="eyebrow">ДИНАМИКА</div><h3>Рост рабочих весов</h3></div></div><div id="progress-list" class="empty-state">Запиши упражнение с весом хотя бы дважды, чтобы увидеть изменение.</div></section>
+          <section id="active-session" class="panel active-session" hidden></section>
+          <section class="panel log-panel session-history"><div class="panel-head"><div><div class="eyebrow">ТВОЙ ПУТЬ</div><h3>История тренировок</h3></div><span class="count-badge" id="workout-count">0 записей</span></div><div id="workout-list" class="empty-state">Здесь появятся твои тренировки.</div></section>
+          <section class="panel progress-panel"><div class="panel-head"><div><div class="eyebrow">ДИНАМИКА</div><h3>Рост рабочих весов</h3></div></div><div id="progress-list" class="empty-state">Повтори упражнение с весом в двух тренировках, чтобы увидеть изменение.</div></section>
         </section>
 
         <section class="page" id="nutrition" aria-label="Питание">
