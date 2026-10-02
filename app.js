@@ -1,4 +1,4 @@
-import { GROUPS, exerciseKey, exerciseHistory, sessionVolume, groupOverview, suggestedGoal, recordChanges, sessionSummary, plateauDetected, estimatedMax, bestSet, dayDistance } from "./metrics.mjs";
+import { GROUPS, exerciseKey, exerciseHistory, sessionVolume, groupOverview, suggestedGoal, recordChanges, sessionSummary, plateauDetected, estimatedMax, bestSet, dayDistance } from "./metrics.mjs?v=1";
 
 const STORAGE_KEY = "temp-health-v1";
 const TIMER_KEY = "temp-rest-timer-v1";
