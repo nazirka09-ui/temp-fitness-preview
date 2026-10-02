@@ -39,3 +39,5 @@
 
 :root[data-theme="dark"] .chart-weight{stroke:#b6d991;fill:#b6d991}:root[data-theme="dark"] .chart-estimate{stroke:#c1afea;fill:#c1afea}:root[data-theme="dark"] .chart-weight[fill="none"],:root[data-theme="dark"] .chart-estimate[fill="none"]{fill:none}
 @media(max-width:720px){.topbar{display:grid;grid-template-columns:minmax(0,1fr) auto}.topbar-actions{display:grid;justify-items:end;margin-left:0}.theme-switch{order:1}.topbar-actions .date-chip{order:2}.topbar .eyebrow{max-width:155px}}
+
+.mobile-nav .nav-icon{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.mobile-nav .nav-label{font-size:10px;line-height:1.3}.mobile-nav a{gap:5px;min-height:48px}.mobile-nav a.active{color:var(--positive,#456a36)}.mobile-nav a:focus-visible{outline:2px solid var(--positive,#456a36);outline-offset:-2px;border-radius:8px}
