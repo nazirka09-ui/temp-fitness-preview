@@ -791,6 +791,126 @@ function liveAddExerciseForm(session) {
   });
   return form;
 }
+
+function addRecordedSet(card, source = null) {
+  const rows = card.querySelector(".record-sets");
+  const row = element("div", "record-set-row");
+  const label = element("span", "record-set-number");
+  const weightLabel = element("label", "", "Вес, кг");
+  const weight = element("input"); weight.type = "number"; weight.name = "weight";
+  weight.min = "0"; weight.max = "1000"; weight.step = "0.5"; weight.required = true;
+  weight.value = source?.weight ?? 0; weightLabel.append(weight);
+  const repsLabel = element("label", "record-reps-label");
+  const caption = element("span", "record-reps-caption", "Повторения");
+  const reps = element("input"); reps.type = "number"; reps.name = "reps";
+  reps.min = "1"; reps.max = "10000"; reps.step = "1"; reps.required = true;
+  reps.value = source?.reps || ""; repsLabel.append(caption, reps);
+  const effortLabel = element("label", "record-effort", "Усилие");
+  const effort = element("select"); effort.name = "note";
+  for (const note of ["", "легко", "нормально", "тяжело", "до отказа"]) {
+    const option = element("option", "", note || "Не отмечать"); option.value = note; effort.append(option);
+  }
+  effortLabel.append(effort);
+  const remove = element("button", "text-button danger record-remove-set", "Удалить");
+  remove.type = "button";
+  remove.addEventListener("click", () => { row.remove(); updateRecordedFields(); });
+  row.append(label, weightLabel, repsLabel, effortLabel, remove);
+  rows.append(row);
+  updateRecordedFields();
+}
+function updateRecordedFields() {
+  const running = document.querySelector("#record-workout-form").elements.activity.value === "Бег";
+  document.querySelectorAll(".record-exercise").forEach((card, index) => {
+    card.querySelector(".record-exercise-heading").textContent = `Упражнение ${index + 1}`;
+    const rows = card.querySelectorAll(".record-set-row");
+    rows.forEach((row, setIndex) => {
+      row.querySelector(".record-set-number").textContent = running ? `Отрезок ${setIndex + 1}` : `Подход ${setIndex + 1}`;
+      const weight = row.querySelector('[name="weight"]');
+      weight.disabled = running; weight.parentElement.hidden = running;
+      row.querySelector(".record-reps-caption").textContent = running ? "Минуты" : "Повторения";
+      row.querySelector('[name="reps"]').step = running ? "0.1" : "1";
+      row.querySelector(".record-effort").hidden = running;
+      row.querySelector(".record-remove-set").disabled = rows.length === 1;
+    });
+    card.querySelector(".record-add-set").textContent = running ? "＋ Добавить отрезок" : "＋ Добавить подход";
+  });
+}
+function addRecordedExercise() {
+  const card = element("section", "panel record-exercise");
+  const header = element("div", "panel-head");
+  const heading = element("h3", "record-exercise-heading");
+  const remove = element("button", "text-button danger", "Удалить упражнение"); remove.type = "button";
+  remove.addEventListener("click", () => { card.remove(); updateRecordedFields(); });
+  header.append(heading, remove);
+  const details = element("div", "form-row");
+  const nameLabel = element("label", "", "Упражнение");
+  const name = element("input"); name.name = "exerciseName"; name.required = true; name.maxLength = 80;
+  name.placeholder = "Например, жим лёжа"; name.setAttribute("list", "record-exercise-options");
+  nameLabel.append(name);
+  const groupLabel = element("label", "", "Группа мышц");
+  const group = groupSelect("Другое"); groupLabel.append(group);
+  name.addEventListener("input", () => {
+    name.setCustomValidity(name.value.trim() ? "" : "Укажи название упражнения.");
+    const inferred = inferGroup(name.value); if (inferred !== "Другое") group.value = inferred;
+  });
+  details.append(nameLabel, groupLabel);
+  const rows = element("div", "record-sets");
+  const add = element("button", "small-button record-add-set", "＋ Добавить подход"); add.type = "button";
+  add.addEventListener("click", () => {
+    const last = rows.lastElementChild;
+    addRecordedSet(card, last ? { weight: last.querySelector('[name="weight"]').value, reps: last.querySelector('[name="reps"]').value } : null);
+  });
+  card.append(header, details, rows, add);
+  document.querySelector("#record-exercises").append(card);
+  addRecordedSet(card);
+  return card;
+}
+function initRecordedWorkout() {
+  const form = document.querySelector("#record-workout-form");
+  form.elements.date.value = today(); form.elements.date.max = today();
+  const options = document.querySelector("#record-exercise-options");
+  for (const name of [...new Set([...CATALOG, ...data.sessions.flatMap(session => session.exercises.map(exercise => exercise.name))])]) {
+    const option = element("option"); option.value = name; options.append(option);
+  }
+  addRecordedExercise();
+  form.elements.activity.addEventListener("change", updateRecordedFields);
+  form.elements.title.addEventListener("input", () => form.elements.title.setCustomValidity(form.elements.title.value.trim() ? "" : "Укажи название тренировки."));
+  document.querySelector("#record-add-exercise").addEventListener("click", () => {
+    const card = addRecordedExercise(); card.querySelector('[name="exerciseName"]').focus();
+  });
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    const cards = [...document.querySelectorAll(".record-exercise")];
+    if (!cards.length) { addRecordedExercise().querySelector('[name="exerciseName"]').focus(); return; }
+    if (!form.reportValidity()) return;
+    const running = form.elements.activity.value === "Бег";
+    const createdAt = Date.now();
+    const exercises = cards.map(card => ({
+      id: uid(), name: card.querySelector('[name="exerciseName"]').value.trim(),
+      group: card.querySelector('[name="group"]').value, completed: true,
+      sets: [...card.querySelectorAll(".record-set-row")].map(row => ({
+        id: uid(), weight: running ? 0 : number(row.querySelector('[name="weight"]').value),
+        reps: number(row.querySelector('[name="reps"]').value),
+        note: running ? "" : row.querySelector('[name="note"]').value, createdAt,
+      })),
+    }));
+    const session = {
+      id: uid(), title: form.elements.title.value.trim(), date: form.elements.date.value,
+      activity: form.elements.activity.value, status: "done", createdAt, exercises,
+    };
+    const duration = number(form.elements.duration.value);
+    if (duration) {
+      session.startedAt = new Date(`${session.date}T00:00:00`).getTime();
+      session.completedAt = session.startedAt + duration * 60000;
+    }
+    data.sessions.push(session); save();
+    resultSessionId = session.id;
+    form.reset(); form.elements.date.value = today();
+    document.querySelector("#record-exercises").replaceChildren(); addRecordedExercise();
+    render(); location.hash = "#workout-result";
+  });
+}
+
 function renderLive() {
   const session = liveSession();
   const target = document.querySelector("#live-content");
@@ -954,15 +1074,15 @@ function startTimer(seconds) {
 function render() { renderTemplates(); renderWorkouts(); renderFood(); renderTimer(); renderHero(); renderFlow(); renderLive(); renderResult(); }
 function navigate() {
   const requested = location.hash.slice(1);
-  const page = ["overview", "training", "nutrition", "learn", "workout-flow", "workout-live", "workout-result"].includes(requested) ? requested : "overview";
+  const page = ["overview", "training", "nutrition", "learn", "workout-flow", "workout-live", "workout-result", "workout-record"].includes(requested) ? requested : "overview";
   document.querySelectorAll(".page").forEach(node => node.classList.toggle("active", node.id === page));
-  document.body.classList.toggle("immersive", ["workout-flow", "workout-live", "workout-result"].includes(page));
+  document.body.classList.toggle("immersive", ["workout-flow", "workout-live", "workout-result", "workout-record"].includes(page));
   document.querySelectorAll("[data-page]").forEach(node => {
     const active = node.dataset.page === page;
     node.classList.toggle("active", active);
     if (active) node.setAttribute("aria-current", "page"); else node.removeAttribute("aria-current");
   });
-  document.querySelector("#page-title").textContent = ({ overview: "Обзор", training: "Тренировки", nutrition: "Питание", learn: "База знаний", "workout-flow": "Новая тренировка", "workout-live": "Тренировка", "workout-result": "Результат" })[page];
+  document.querySelector("#page-title").textContent = ({ overview: "Обзор", training: "Тренировки", nutrition: "Питание", learn: "База знаний", "workout-flow": "Новая тренировка", "workout-live": "Тренировка", "workout-result": "Результат", "workout-record": "Записать тренировку" })[page];
   window.scrollTo(0, 0);
 }
 
@@ -1013,5 +1133,6 @@ document.querySelector("#food-form").addEventListener("submit", event => {
 });
 window.addEventListener("hashchange", navigate);
 setInterval(() => { renderTimer(); updateLiveDuration(); renderLiveRest(); }, 1000);
+initRecordedWorkout();
 render(); navigate();
 if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("./sw.js").catch(() => {});

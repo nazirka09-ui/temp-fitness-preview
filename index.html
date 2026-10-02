@@ -32,7 +32,7 @@
 
         <section class="page active" id="overview" aria-labelledby="page-title">
           <div class="hero">
-            <div><span class="hero-kicker">НАЧНИ С СЕГОДНЯ</span><h2>Твой темп.<br /><em>Твой прогресс.</em></h2><p>Записывай тренировки и питание. Смотри, как усилия превращаются в результат.</p><a class="button button-light" id="hero-start" href="#workout-flow">Начать тренировку <span>↗</span></a><button class="hero-secondary" id="hero-new" type="button" hidden>Новая тренировка</button></div>
+            <div><span class="hero-kicker">НАЧНИ С СЕГОДНЯ</span><h2>Твой темп.<br /><em>Твой прогресс.</em></h2><p>Записывай тренировки и питание. Смотри, как усилия превращаются в результат.</p><div class="hero-actions"><a class="button button-light" id="hero-start" href="#workout-flow">Начать тренировку <span>↗</span></a><a class="button hero-record" id="hero-record" href="#workout-record">Записать тренировку <span>＋</span></a></div><button class="hero-secondary" id="hero-new" type="button" hidden>Новая тренировка</button></div>
             <div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="art-core">↑</div><div class="art-label">ДВИГАЙСЯ<br />ВПЕРЁД</div></div>
           </div>
           <div class="section-heading"><div><div class="eyebrow">ГЛАВНОЕ ЗА СЕГОДНЯ</div><h2>Всё под контролем</h2></div></div>
@@ -64,6 +64,30 @@
           <section class="panel log-panel session-history"><div class="panel-head"><div><div class="eyebrow">ТВОЙ ПУТЬ</div><h3>История тренировок</h3></div><span class="count-badge" id="workout-count">0 записей</span></div><div id="workout-list" class="empty-state">Здесь появятся твои тренировки.</div></section>
           <section class="panel progress-panel"><div class="panel-head"><div><div class="eyebrow">ПО КАЖДОМУ УПРАЖНЕНИЮ</div><h3>Личная история</h3></div></div><label class="history-date-label">Открыть упражнение <select id="exercise-select"><option value="">Выбери упражнение</option></select></label><div id="exercise-detail" class="empty-state">Выбери упражнение, чтобы увидеть все подходы, рекорды и график.</div></section>
           <section class="panel progress-panel"><div class="panel-head"><div><div class="eyebrow">ДИНАМИКА</div><h3>Прогресс и частота</h3></div></div><div id="progress-list" class="empty-state">После нескольких тренировок здесь появятся изменения по упражнениям.</div><div id="group-list"></div><p class="form-help">Объём = вес × повторения по всем подходам. Процент показывает изменение записанного объёма за последние 4 недели к предыдущим 4 неделям; это не измерение роста мышц.</p></section>
+        </section>
+
+
+        <section class="page" id="workout-record" aria-label="Записать прошедшую тренировку">
+          <div class="record-shell">
+            <a class="record-back" href="#overview">← К обзору</a>
+            <div class="eyebrow">УЖЕ ПОТРЕНИРОВАЛСЯ</div>
+            <h2 class="flow-title">Записать тренировку</h2>
+            <p class="flow-subtitle">Укажи дату, упражнения и сделанные подходы. Результаты попадут в историю и статистику.</p>
+            <form id="record-workout-form">
+              <div class="panel record-details">
+                <label>Название тренировки<input name="title" type="text" maxlength="80" placeholder="Например, день ног" required /></label>
+                <div class="form-row">
+                  <label>Дата<input name="date" type="date" required /></label>
+                  <label>Вид активности<select name="activity"><option>Силовая</option><option>Кроссфит</option><option>Бег</option><option>Другая</option></select></label>
+                </div>
+                <label>Длительность, минут — необязательно<input name="duration" type="number" min="1" max="1440" step="1" placeholder="Например, 60" /></label>
+              </div>
+              <datalist id="record-exercise-options"></datalist>
+              <div id="record-exercises"></div>
+              <button type="button" class="small-button record-add-exercise" id="record-add-exercise">＋ Добавить упражнение</button>
+              <button type="submit" class="button button-dark record-save">Сохранить тренировку <span>✓</span></button>
+            </form>
+          </div>
         </section>
 
         <section class="page" id="workout-flow" aria-label="Подготовка тренировки">
