@@ -1,24 +1,37 @@
-import { GROUPS, exerciseKey, exerciseHistory, sessionVolume, groupOverview, suggestedGoal, recordChanges, sessionSummary, plateauDetected, estimatedMax, bestSet, dayDistance } from "./metrics.mjs?v=1";
+import { GROUPS, exerciseKey, exerciseHistory, sessionVolume, groupOverview, suggestedGoal, recordChanges, sessionSummary, plateauDetected, estimatedMax, bestSet, dayDistance, repeatWorkoutCandidate } from "./metrics.mjs?v=2";
 
 const STORAGE_KEY = "temp-health-v1";
 const TIMER_KEY = "temp-rest-timer-v1";
 const REST_DURATION_KEY = "temp-rest-duration-v1";
 const AUTO_REST_KEY = "temp-auto-rest-v1";
 const TEMPLATES = [
-  { id: "legs", title: "День ног", activity: "Силовая", exercises: ["Приседания со штангой", "Жим ногами", "Выпады с гантелями", "Сгибание ног", "Подъёмы на носки"] },
+  { id: "legs", title: "День ног", activity: "Силовая", exercises: ["Жим ногами", "Разгибание ног", "Сгибание ног", "Румынская тяга", "Икры"] },
   { id: "back", title: "Спина и бицепс", activity: "Силовая", exercises: ["Тяга верхнего блока", "Тяга штанги в наклоне", "Горизонтальная тяга", "Подтягивания", "Сгибание рук с гантелями"] },
   { id: "chest", title: "Грудь и трицепс", activity: "Силовая", exercises: ["Жим лёжа", "Жим гантелей лёжа", "Разведение гантелей", "Отжимания", "Разгибание рук на блоке"] },
   { id: "shoulders", title: "Плечи", activity: "Силовая", exercises: ["Жим гантелей сидя", "Махи гантелями в стороны", "Обратная бабочка", "Тяга к подбородку"] },
   { id: "full", title: "Всё тело", activity: "Силовая", exercises: ["Приседания", "Жим лёжа", "Тяга верхнего блока", "Планка"] },
   { id: "run", title: "Пробежка", activity: "Бег", exercises: ["Лёгкий бег", "Интервальный бег", "Ходьба"] },
 ];
-const CATALOG = [...new Set(TEMPLATES.flatMap(template => template.exercises))];
+const CATALOG = [...new Set([...TEMPLATES.flatMap(template => template.exercises), "Приседания со штангой", "Выпады с гантелями", "Подъёмы на носки", "Молотковые сгибания", "Французский жим", "Становая тяга"])];
+const FLOW_GROUPS = ["Грудь", "Спина", "Ноги", "Плечи", "Руки", "Всё тело", "Своя тренировка"];
+const FLOW_DEFAULTS = {
+  "Грудь": ["Жим лёжа", "Жим гантелей лёжа", "Разведение гантелей", "Отжимания"],
+  "Спина": ["Тяга верхнего блока", "Тяга штанги в наклоне", "Горизонтальная тяга", "Подтягивания"],
+  "Ноги": ["Жим ногами", "Разгибание ног", "Сгибание ног", "Румынская тяга", "Икры"],
+  "Плечи": ["Жим гантелей сидя", "Махи гантелями в стороны", "Обратная бабочка"],
+  "Руки": ["Сгибание рук с гантелями", "Разгибание рук на блоке", "Молотковые сгибания", "Французский жим"],
+  "Всё тело": ["Приседания", "Жим лёжа", "Тяга верхнего блока", "Планка"],
+  "Своя тренировка": [],
+};
 const GROUP_BY_EXERCISE = new Map([
   ...TEMPLATES[0].exercises.map(name => [exerciseKey(name), "Ноги"]),
   ...TEMPLATES[1].exercises.map(name => [exerciseKey(name), name.includes("Сгибание рук") ? "Руки" : "Спина"]),
   ...TEMPLATES[2].exercises.map(name => [exerciseKey(name), name.includes("Разгибание рук") ? "Руки" : "Грудь"]),
   ...TEMPLATES[3].exercises.map(name => [exerciseKey(name), "Плечи"]),
   [exerciseKey("Приседания"), "Ноги"], [exerciseKey("Планка"), "Кор"],
+  [exerciseKey("Приседания со штангой"), "Ноги"], [exerciseKey("Выпады с гантелями"), "Ноги"],
+  [exerciseKey("Подъёмы на носки"), "Ноги"], [exerciseKey("Молотковые сгибания"), "Руки"],
+  [exerciseKey("Французский жим"), "Руки"], [exerciseKey("Становая тяга"), "Спина"],
 ]);
 const inferGroup = name => GROUP_BY_EXERCISE.get(exerciseKey(name)) || "Другое";
 const today = () => {
@@ -30,6 +43,7 @@ const formatNumber = value => new Intl.NumberFormat("ru-RU", { maximumFractionDi
 const formatDate = value => new Date(`${value}T12:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
 const recordWord = count => count % 10 === 1 && count % 100 !== 11 ? "тренировка" : [2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100) ? "тренировки" : "тренировок";
 const exerciseWord = count => count % 10 === 1 && count % 100 !== 11 ? "упражнение" : [2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100) ? "упражнения" : "упражнений";
+const setWord = count => count % 10 === 1 && count % 100 !== 11 ? "подход" : [2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100) ? "подхода" : "подходов";
 const recordPhrase = count => count % 10 === 1 && count % 100 !== 11 ? "новый рекорд" : [2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100) ? "новых рекорда" : "новых рекордов";
 const uid = () => crypto.randomUUID();
 
@@ -63,6 +77,10 @@ let timerEnd = Number(localStorage.getItem(TIMER_KEY)) || 0;
 let autoRest = localStorage.getItem(AUTO_REST_KEY) !== "false";
 let selectedExercise = "";
 let finishedSessionId = null;
+let flowDraft = { step: 1, group: null, title: "", activity: "Силовая", exercises: [], replacingIndex: null };
+let resultSessionId = null;
+let liveRestSeconds = Number(localStorage.getItem("temp-live-rest-seconds-v1")) || 90;
+let liveRest = (() => { try { return JSON.parse(localStorage.getItem("temp-live-rest-v1")); } catch { return null; } })();
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -457,8 +475,9 @@ function renderOverview() {
   target.replaceChildren();
   const current = activeSession();
   if (current) {
-    target.append(element("h3", "", `Сейчас идёт: ${current.title}`), element("p", "", `${current.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0)} подходов записано.`));
-    const link = element("a", "button button-dark today-action", "Продолжить тренировку ↗"); link.href = "#training"; target.append(link);
+    const count = current.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0);
+    target.append(element("h3", "", `Сейчас идёт: ${current.title}`), element("p", "", `Записано ${count} ${setWord(count)}.`));
+    const link = element("a", "button button-dark today-action", "Продолжить тренировку ↗"); link.href = "#workout-live"; target.append(link);
     return;
   }
   const byTemplate = new Map();
@@ -477,14 +496,7 @@ function renderOverview() {
   }
   const button = element("button", "button button-dark today-action", distance <= 1 ? "Посмотреть тренировки ↗" : "Выбрать тренировку ↗");
   button.type = "button";
-  button.addEventListener("click", () => {
-    const template = TEMPLATES.find(item => item.id === candidate.templateId);
-    if (template) {
-      selectedTemplate = template;
-      const form = document.querySelector("#session-form"); form.elements.title.value = template.title; form.elements.activity.value = template.activity; renderTemplates();
-    } else document.querySelector("#session-form").elements.title.value = candidate.title;
-    location.hash = "#training";
-  });
+  button.addEventListener("click", () => distance <= 1 ? location.hash = "#training" : openFlow(focusGroup(candidate)));
   target.append(button);
 }
 
@@ -519,6 +531,393 @@ function renderFood() {
   }));
 }
 
+function completedSessions() {
+  return data.sessions.filter(session => session.status !== "active" && session.exercises.some(exercise => exercise.sets.length)).sort((a, b) => a.date.localeCompare(b.date) || (a.createdAt || 0) - (b.createdAt || 0));
+}
+function focusGroup(session) {
+  if (session.focusGroup) return session.focusGroup;
+  const byTemplate = { legs: "Ноги", back: "Спина", chest: "Грудь", shoulders: "Плечи", full: "Всё тело" };
+  if (byTemplate[session.templateId]) return byTemplate[session.templateId];
+  const title = exerciseKey(session.title);
+  if (title.includes("ног")) return "Ноги";
+  if (title.includes("груд") || title.includes("трицепс")) return "Грудь";
+  if (title.includes("спин") || title.includes("бицепс")) return "Спина";
+  if (title.includes("плеч")) return "Плечи";
+  if (title.includes("рук")) return "Руки";
+  if (title.includes("тело")) return "Всё тело";
+  const counts = new Map();
+  for (const exercise of session.exercises) {
+    const group = exercise.group || inferGroup(exercise.name);
+    if (group !== "Другое") counts.set(group, (counts.get(group) || 0) + 1);
+  }
+  const most = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
+  return FLOW_GROUPS.includes(most) ? most : "Своя тренировка";
+}
+function lastGroupWorkout(group) { return completedSessions().filter(session => focusGroup(session) === group).at(-1) || null; }
+function repeatCandidate() { return repeatWorkoutCandidate(data.sessions, focusGroup); }
+function lastExerciseEntry(name) { return exerciseHistory(data.sessions, name).at(-1) || null; }
+function previousResult(name) {
+  const entry = lastExerciseEntry(name);
+  return entry ? bestSet(entry.sets) : null;
+}
+function goalLabel(goal) {
+  if (!goal) return "";
+  if (goal.reason?.startsWith("Повтори результат")) return `${formatNumber(goal.weight)} кг × ${formatNumber(goal.reps)}`;
+  const end = goal.reps + (goal.reps >= 13 ? 2 : 1);
+  return `${formatNumber(goal.weight)} кг × ${formatNumber(goal.reps)}–${formatNumber(end)}`;
+}
+function daysAgo(date) {
+  const days = dayDistance(date, today());
+  if (days <= 0) return "сегодня";
+  if (days === 1) return "вчера";
+  return `${days} ${days % 10 === 1 && days % 100 !== 11 ? "день" : [2, 3, 4].includes(days % 10) && ![12, 13, 14].includes(days % 100) ? "дня" : "дней"} назад`;
+}
+function renderHero() {
+  const button = document.querySelector("#hero-start");
+  const secondary = document.querySelector("#hero-new");
+  const current = activeSession();
+  const repeat = current ? null : repeatCandidate();
+  const genitive = { "Грудь": "груди", "Спина": "спины", "Ноги": "ног", "Плечи": "плеч", "Руки": "рук", "Всё тело": "всего тела", "Своя тренировка": "свою тренировку" };
+  const label = current ? "Продолжить тренировку" : repeat ? focusGroup(repeat) === "Своя тренировка" ? "Повторить последнюю тренировку" : `Повторить последнюю тренировку ${genitive[focusGroup(repeat)]}` : "Начать тренировку";
+  button.replaceChildren(document.createTextNode(`${label} `), element("span", "", "↗"));
+  button.href = current ? "#workout-live" : repeat ? "#workout-live" : "#workout-flow";
+  secondary.hidden = !repeat;
+  const trainingButton = document.querySelector("#training-start");
+  trainingButton.replaceChildren(document.createTextNode(current ? "Продолжить тренировку " : "Начать тренировку "), element("span", "", "↗"));
+}
+function openFlow(group = null) {
+  if (activeSession()) { location.hash = "#workout-live"; return; }
+  flowDraft = { step: 1, group: null, title: "", activity: "Силовая", exercises: [], replacingIndex: null };
+  if (group) chooseFlowGroup(group);
+  renderFlow();
+  location.hash = "#workout-flow";
+}
+function chooseFlowGroup(group) {
+  const previous = lastGroupWorkout(group);
+  flowDraft.group = group;
+  flowDraft.title = group;
+  flowDraft.activity = previous?.activity || "Силовая";
+  flowDraft.replacingIndex = null;
+  flowDraft.exercises = previous ? previous.exercises.map(exercise => ({ name: exercise.name, group: exercise.group || inferGroup(exercise.name), plannedSets: exercise.sets.length || exercise.plannedSets || 3 })) : (FLOW_DEFAULTS[group] || []).map(name => ({ name, group: inferGroup(name) === "Другое" ? group : inferGroup(name), plannedSets: 3 }));
+}
+function createExerciseDatalist() {
+  const list = element("datalist"); list.id = "flow-exercise-options";
+  for (const name of CATALOG) { const option = element("option"); option.value = name; list.append(option); }
+  return list;
+}
+function groupSelect(selected) {
+  const select = element("select"); select.name = "group";
+  for (const group of GROUPS) { const option = element("option", "", group); option.value = group; select.append(option); }
+  select.value = GROUPS.includes(selected) ? selected : "Другое";
+  return select;
+}
+function exerciseEditorForm(current = null, onSave) {
+  const form = element("form", "flow-exercise-form");
+  const nameLabel = element("label", "", current ? "Новое упражнение" : "Добавить упражнение");
+  const name = element("input"); name.name = "name"; name.type = "text"; name.required = true; name.maxLength = 80; name.placeholder = "Название упражнения"; name.setAttribute("list", "flow-exercise-options"); name.value = current?.name || "";
+  nameLabel.append(name);
+  const groupLabel = element("label", "", "Группа");
+  const group = groupSelect(current?.group || (GROUPS.includes(flowDraft.group) ? flowDraft.group : "Другое"));
+  groupLabel.append(group);
+  name.addEventListener("input", () => { const inferred = inferGroup(name.value); if (inferred !== "Другое") group.value = inferred; });
+  const submit = element("button", "small-button", current ? "Заменить" : "Добавить"); submit.type = "submit";
+  form.append(nameLabel, groupLabel, submit);
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    const value = name.value.trim();
+    if (!value || flowDraft.exercises.some((exercise, index) => exerciseKey(exercise.name) === exerciseKey(value) && index !== flowDraft.replacingIndex)) return;
+    onSave({ name: value, group: group.value, plannedSets: current?.plannedSets || 3 });
+    renderFlow();
+  });
+  return form;
+}
+function renderFlow() {
+  const target = document.querySelector("#flow-content");
+  const next = document.querySelector("#flow-next");
+  document.querySelector("#flow-counter").textContent = `Шаг ${flowDraft.step} из 3`;
+  document.querySelector("#flow-progress-fill").style.width = `${flowDraft.step / 3 * 100}%`;
+  document.querySelector("#flow-back").textContent = flowDraft.step === 1 ? "← К обзору" : "← Назад";
+  next.replaceChildren(document.createTextNode(flowDraft.step === 3 ? "Начать тренировку " : "Далее "), element("span", "", "↗"));
+  next.disabled = flowDraft.step === 1 ? !flowDraft.group : flowDraft.exercises.length === 0 || !flowDraft.title.trim();
+  target.replaceChildren();
+  if (flowDraft.step === 1) {
+    target.append(element("div", "eyebrow", "ШАГ 1 / 3"), element("h2", "flow-title", "Что тренируем сегодня?"), element("p", "flow-subtitle", "Выбери направление. Следующий экран уже вспомнит твою последнюю тренировку."));
+    const grid = element("div", "flow-group-grid");
+    for (const group of FLOW_GROUPS) {
+      const button = element("button", `flow-group-card${flowDraft.group === group ? " selected" : ""}`);
+      button.type = "button";
+      button.append(element("strong", "", group));
+      const previous = lastGroupWorkout(group);
+      if (previous) button.append(element("span", "", `Последняя тренировка ${daysAgo(previous.date)}`));
+      else button.append(element("span", "", group === "Своя тренировка" ? "Собери свой вариант" : "Готовый набор упражнений"));
+      button.addEventListener("click", () => { chooseFlowGroup(group); renderFlow(); });
+      grid.append(button);
+    }
+    target.append(grid);
+    return;
+  }
+  if (flowDraft.step === 2) {
+    target.append(element("div", "eyebrow", "ШАГ 2 / 3"), element("h2", "flow-title", "Упражнения на сегодня"), element("p", "flow-subtitle", `Выбрано: ${flowDraft.group}. Порядок и состав можно поменять перед стартом.`));
+    if (flowDraft.group === "Своя тренировка") {
+      const label = element("label", "flow-name-label", "Название тренировки");
+      const input = element("input"); input.type = "text"; input.maxLength = 80; input.value = flowDraft.title; input.addEventListener("input", () => { flowDraft.title = input.value; next.disabled = !flowDraft.exercises.length || !flowDraft.title.trim(); });
+      label.append(input); target.append(label);
+      const activityLabel = element("label", "flow-name-label", "Вид активности");
+      const activity = element("select");
+      for (const value of ["Силовая", "Кроссфит", "Бег", "Другая"]) { const option = element("option", "", value); option.value = value; activity.append(option); }
+      activity.value = flowDraft.activity;
+      activity.addEventListener("change", () => { flowDraft.activity = activity.value; renderFlow(); });
+      activityLabel.append(activity); target.append(activityLabel);
+    }
+    const list = element("div", "flow-exercise-list");
+    flowDraft.exercises.forEach((exercise, index) => {
+      const card = element("div", "flow-exercise-row");
+      const numberTag = element("span", "flow-exercise-number", `${index + 1}`);
+      const textBox = element("div", "flow-exercise-text");
+      textBox.append(element("strong", "", exercise.name));
+      const previous = previousResult(exercise.name);
+      textBox.append(element("span", "", previous ? `Прошлый результат: ${setText(previous, flowDraft.activity === "Бег")}` : "Первое занятие · 3 подхода"));
+      const controls = element("div", "flow-exercise-controls");
+      const up = element("button", "icon-button", "↑"); up.type = "button"; up.disabled = index === 0; up.setAttribute("aria-label", `Поднять ${exercise.name}`); up.addEventListener("click", () => { [flowDraft.exercises[index - 1], flowDraft.exercises[index]] = [flowDraft.exercises[index], flowDraft.exercises[index - 1]]; renderFlow(); });
+      const down = element("button", "icon-button", "↓"); down.type = "button"; down.disabled = index === flowDraft.exercises.length - 1; down.setAttribute("aria-label", `Опустить ${exercise.name}`); down.addEventListener("click", () => { [flowDraft.exercises[index + 1], flowDraft.exercises[index]] = [flowDraft.exercises[index], flowDraft.exercises[index + 1]]; renderFlow(); });
+      const replace = element("button", "text-button", "Заменить"); replace.type = "button"; replace.addEventListener("click", () => { flowDraft.replacingIndex = flowDraft.replacingIndex === index ? null : index; renderFlow(); });
+      const remove = element("button", "text-button danger", "Удалить"); remove.type = "button"; remove.addEventListener("click", () => { flowDraft.exercises.splice(index, 1); flowDraft.replacingIndex = null; renderFlow(); });
+      controls.append(up, down, replace, remove); card.append(numberTag, textBox, controls);
+      if (flowDraft.replacingIndex === index) card.append(exerciseEditorForm(exercise, value => { flowDraft.exercises[index] = value; flowDraft.replacingIndex = null; }));
+      list.append(card);
+    });
+    if (!flowDraft.exercises.length) list.append(element("p", "flow-empty", "Добавь хотя бы одно упражнение. Можно выбрать готовое название или вписать своё."));
+    target.append(list, createExerciseDatalist(), exerciseEditorForm(null, value => flowDraft.exercises.push(value)));
+    return;
+  }
+  target.append(element("div", "eyebrow", "ШАГ 3 / 3"), element("h2", "flow-title", "План на сегодня"), element("p", "flow-subtitle", `${flowDraft.title} · ${flowDraft.exercises.length} ${exerciseWord(flowDraft.exercises.length)}. Ориентиры можно изменить прямо во время тренировки.`));
+  const plan = element("div", "flow-plan-list");
+  for (const exercise of flowDraft.exercises) {
+    const card = element("div", "flow-plan-card");
+    card.append(element("strong", "", exercise.name), element("small", "", `${exercise.plannedSets} подхода`));
+    const previous = previousResult(exercise.name);
+    if (previous) card.append(element("p", "", `Прошлый раз: ${setText(previous, flowDraft.activity === "Бег")}`));
+    const goal = suggestedGoal(exerciseHistory(data.sessions, exercise.name));
+    if (goal && previous?.weight > 0 && flowDraft.activity !== "Бег") card.append(element("p", "flow-goal", `Сегодня можно попробовать: ${goalLabel(goal)}`));
+    plan.append(card);
+  }
+  target.append(plan);
+}
+function flowNext() {
+  if (flowDraft.step === 1 && flowDraft.group) { flowDraft.step = 2; renderFlow(); window.scrollTo(0, 0); }
+  else if (flowDraft.step === 2 && flowDraft.exercises.length && flowDraft.title.trim()) { flowDraft.step = 3; renderFlow(); window.scrollTo(0, 0); }
+  else if (flowDraft.step === 3) startFlowSession();
+}
+function startFlowSession(source = null) {
+  if (activeSession()) { location.hash = "#workout-live"; return; }
+  const group = source ? focusGroup(source) : flowDraft.group;
+  const exercises = source ? source.exercises.map(exercise => ({ name: exercise.name, group: exercise.group || inferGroup(exercise.name), plannedSets: exercise.sets.length || exercise.plannedSets || 3 })) : flowDraft.exercises;
+  if (!exercises.length) return;
+  const startedAt = Date.now();
+  const session = { id: uid(), date: today(), title: source ? source.title : flowDraft.title.trim(), activity: source?.activity || flowDraft.activity, focusGroup: group, templateId: source?.templateId || ({ "Грудь": "chest", "Спина": "back", "Ноги": "legs", "Плечи": "shoulders", "Руки": "arms", "Всё тело": "full" })[group] || "", status: "active", createdAt: startedAt, startedAt, exercises: exercises.map(exercise => ({ id: uid(), name: exercise.name, group: exercise.group, plannedSets: exercise.plannedSets || 3, sets: [] })) };
+  session.currentExerciseId = session.exercises[0].id;
+  data.sessions.push(session);
+  clearLiveRest();
+  save(); render(); location.hash = "#workout-live";
+}
+function liveSession() { return activeSession(); }
+function formatDuration(milliseconds) {
+  const seconds = Math.max(0, Math.floor(milliseconds / 1000));
+  return `${String(Math.floor(seconds / 3600)).padStart(2, "0")}:${String(Math.floor(seconds / 60) % 60).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+}
+function updateLiveDuration() {
+  const session = liveSession();
+  const label = document.querySelector("#live-duration");
+  if (session) label.textContent = formatDuration(Date.now() - (session.startedAt || session.createdAt || Date.now()));
+}
+function persistLiveRest() {
+  if (liveRest) localStorage.setItem("temp-live-rest-v1", JSON.stringify(liveRest));
+  else localStorage.removeItem("temp-live-rest-v1");
+}
+function clearLiveRest() { liveRest = null; persistLiveRest(); }
+function startLiveRest(session) {
+  liveRest = { sessionId: session.id, endAt: Date.now() + liveRestSeconds * 1000, remaining: liveRestSeconds, paused: false };
+  persistLiveRest();
+  startTimer(liveRestSeconds);
+  renderLiveRest();
+}
+function liveRestRemaining() {
+  if (!liveRest || liveRest.sessionId !== liveSession()?.id) return 0;
+  return liveRest.paused ? liveRest.remaining : Math.max(0, Math.ceil((liveRest.endAt - Date.now()) / 1000));
+}
+function renderLiveRest() {
+  const rest = document.querySelector("#live-rest");
+  const form = document.querySelector("#live-set-form");
+  if (!rest || !form) return;
+  const seconds = liveRestRemaining();
+  if (liveRest && !liveRest.paused && seconds === 0) clearLiveRest();
+  const active = Boolean(liveRest && liveRest.sessionId === liveSession()?.id);
+  rest.hidden = !active;
+  form.hidden = active;
+  if (!active) return;
+  rest.querySelector("[data-rest-time]").textContent = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+  rest.querySelector("[data-rest-pause]").textContent = liveRest.paused ? "Продолжить" : "Пауза";
+}
+function pauseLiveRest() {
+  if (!liveRest) return;
+  if (liveRest.paused) { liveRest.endAt = Date.now() + liveRest.remaining * 1000; liveRest.paused = false; startTimer(liveRest.remaining); }
+  else { liveRest.remaining = liveRestRemaining(); liveRest.paused = true; timerEnd = 0; localStorage.removeItem(TIMER_KEY); renderTimer(); }
+  persistLiveRest(); renderLiveRest();
+}
+function skipLiveRest() { clearLiveRest(); timerEnd = 0; localStorage.removeItem(TIMER_KEY); renderTimer(); renderLiveRest(); }
+function addLiveRestTime() {
+  if (!liveRest) return;
+  if (liveRest.paused) liveRest.remaining += 30;
+  else liveRest.endAt += 30000;
+  persistLiveRest(); renderLiveRest();
+}
+function liveAddExerciseForm(session) {
+  const form = element("form", "flow-exercise-form");
+  const label = element("label", "", "Упражнение");
+  const input = element("input"); input.name = "name"; input.required = true; input.maxLength = 80; input.placeholder = "Название упражнения"; input.setAttribute("list", "flow-exercise-options"); label.append(input);
+  const groupLabel = element("label", "", "Группа");
+  const group = groupSelect(focusGroup(session)); groupLabel.append(group);
+  input.addEventListener("input", () => { const inferred = inferGroup(input.value); if (inferred !== "Другое") group.value = inferred; });
+  const submit = element("button", "small-button", "Добавить"); submit.type = "submit";
+  form.append(label, groupLabel, submit);
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    const name = input.value.trim();
+    if (!name) return;
+    const entry = { id: uid(), name, group: group.value, plannedSets: 3, sets: [] };
+    session.exercises.push(entry);
+    session.currentExerciseId = entry.id;
+    save(); render();
+  });
+  return form;
+}
+function renderLive() {
+  const session = liveSession();
+  const target = document.querySelector("#live-content");
+  const nav = document.querySelector("#live-exercise-nav");
+  target.replaceChildren(); nav.replaceChildren();
+  if (!session) { target.append(element("p", "empty-state", "Активной тренировки нет.")); return; }
+  document.querySelector("#live-title").textContent = session.title;
+  updateLiveDuration();
+  if (!session.exercises.some(exercise => exercise.id === session.currentExerciseId)) session.currentExerciseId = session.exercises[0]?.id;
+  for (const [index, exercise] of session.exercises.entries()) {
+    const button = element("button", `live-exercise-tab${session.currentExerciseId === exercise.id ? " active" : ""}`, `${index + 1}. ${exercise.name}`);
+    button.type = "button";
+    button.append(element("small", "", `${exercise.sets.length}/${exercise.plannedSets || 3}`));
+    button.addEventListener("click", () => { if (liveRest) skipLiveRest(); session.currentExerciseId = exercise.id; save(); renderLive(); });
+    nav.append(button);
+  }
+  const exercise = session.exercises.find(item => item.id === session.currentExerciseId);
+  if (!exercise) {
+    target.append(element("p", "empty-state", "Добавь первое упражнение, чтобы начать запись подходов."));
+    target.append(createExerciseDatalist(), liveAddExerciseForm(session));
+    return;
+  }
+  const currentIndex = session.exercises.indexOf(exercise);
+  target.append(element("div", "eyebrow", `УПРАЖНЕНИЕ ${currentIndex + 1} ИЗ ${session.exercises.length}`), element("h3", "live-exercise-title", exercise.name));
+  const history = exerciseHistory(data.sessions, exercise.name, session.id);
+  const previous = history.at(-1);
+  const prior = previous ? bestSet(previous.sets) : null;
+  const goal = suggestedGoal(history);
+  if (prior) target.append(element("p", "live-previous", `Прошлый раз: ${setText(prior, isRun(session))}`));
+  if (goal && prior?.weight > 0 && !isRun(session)) target.append(element("p", "live-goal", `Ориентир сегодня: ${goalLabel(goal)}. Можно изменить.`));
+  const completed = element("div", "live-completed");
+  exercise.sets.forEach((set, index) => completed.append(element("div", "live-set-done", `${index + 1}. ${setText(set, isRun(session))}${set.note ? ` · ${set.note}` : ""} ✓`)));
+  target.append(completed);
+  const rest = element("div", "live-rest"); rest.id = "live-rest";
+  rest.innerHTML = '<div class="eyebrow">МЕЖДУ ПОДХОДАМИ</div><h4>Отдых</h4><div class="live-rest-time" data-rest-time role="timer">01:30</div><div class="live-rest-actions"><button type="button" data-rest-pause>Пауза</button><button type="button" data-rest-skip>Пропустить</button><button type="button" data-rest-add>+30 секунд</button></div>';
+  rest.querySelector("[data-rest-pause]").addEventListener("click", pauseLiveRest);
+  rest.querySelector("[data-rest-skip]").addEventListener("click", skipLiveRest);
+  rest.querySelector("[data-rest-add]").addEventListener("click", addLiveRestTime);
+  target.append(rest);
+  const form = element("form", "live-set-form"); form.id = "live-set-form";
+  const setHeading = element("h4", "", `Подход ${exercise.sets.length + 1}`);
+  form.append(setHeading);
+  const fields = element("div", "live-set-fields");
+  const prefill = exercise.sets.at(-1) || goal || prior;
+  if (!isRun(session)) {
+    const weightLabel = element("label", "", "Вес, кг");
+    const weight = element("input"); weight.type = "number"; weight.name = "weight"; weight.min = "0"; weight.max = "1000"; weight.step = "0.5"; weight.value = prefill?.weight ?? 0; weightLabel.append(weight); fields.append(weightLabel);
+  }
+  const repsLabel = element("label", "", isRun(session) ? "Минуты" : "Повторения");
+  const reps = element("input"); reps.type = "number"; reps.name = "reps"; reps.min = "1"; reps.max = "10000"; reps.required = true; reps.value = prefill?.reps || ""; repsLabel.append(reps); fields.append(repsLabel);
+  form.append(fields);
+  if (!isRun(session)) {
+    const effort = element("label", "live-effort", "Как ощущался подход?");
+    const select = element("select"); select.name = "note";
+    for (const note of ["", "легко", "нормально", "тяжело", "до отказа"]) { const option = element("option", "", note || "Не отмечать"); option.value = note; select.append(option); }
+    effort.append(select); form.append(effort);
+  }
+  const restChoice = element("label", "live-rest-choice", "Отдых после подхода");
+  const select = element("select"); select.name = "restSeconds";
+  for (const [seconds, textValue] of [[60, "1 мин"], [90, "1,5 мин"], [120, "2 мин"], [180, "3 мин"]]) { const option = element("option", "", textValue); option.value = seconds; select.append(option); }
+  select.value = String(liveRestSeconds);
+  select.addEventListener("change", () => { liveRestSeconds = Number(select.value); localStorage.setItem("temp-live-rest-seconds-v1", String(liveRestSeconds)); });
+  restChoice.append(select); form.append(restChoice);
+  const saveButton = element("button", "button button-dark live-save", "Сохранить подход"); saveButton.type = "submit"; form.append(saveButton);
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(form));
+    exercise.sets.push({ id: uid(), weight: isRun(session) ? 0 : number(values.weight), reps: number(values.reps), note: values.note || "", createdAt: Date.now() });
+    save(); render(); startLiveRest(session);
+  });
+  target.append(form);
+  const next = session.exercises[currentIndex + 1];
+  if (next) {
+    const button = element("button", "live-next", `Следующее упражнение: ${next.name} →`);
+    button.type = "button";
+    button.addEventListener("click", () => { if (liveRest) skipLiveRest(); session.currentExerciseId = next.id; save(); renderLive(); });
+    target.append(button);
+  }
+  renderLiveRest();
+}
+function finishLiveWorkout() {
+  const session = liveSession();
+  if (!session) return;
+  document.querySelector("#live-confirm").hidden = true;
+  session.status = "done";
+  session.completedAt = Date.now();
+  resultSessionId = session.id;
+  clearLiveRest(); timerEnd = 0; localStorage.removeItem(TIMER_KEY);
+  save(); render(); location.hash = "#workout-result";
+}
+function renderResult() {
+  const target = document.querySelector("#result-content");
+  const session = data.sessions.find(item => item.id === resultSessionId) || completedSessions().at(-1);
+  target.replaceChildren();
+  if (!session) { target.append(element("h2", "", "Пока нет завершённой тренировки.")); return; }
+  const summary = sessionSummary(session, data.sessions);
+  const used = session.exercises.filter(exercise => exercise.sets.length);
+  const setCount = used.reduce((total, exercise) => total + exercise.sets.length, 0);
+  const duration = session.completedAt && (session.startedAt || session.createdAt) ? formatDuration(session.completedAt - (session.startedAt || session.createdAt)) : "—";
+  const ending = { "Грудь": "Грудь завершена", "Спина": "Спина завершена", "Ноги": "Ноги завершены", "Плечи": "Плечи завершены", "Руки": "Руки завершены", "Всё тело": "Всё тело завершено", "Своя тренировка": "Своя тренировка завершена" };
+  target.append(element("div", "eyebrow", "ТРЕНИРОВКА ЗАВЕРШЕНА"), element("h2", "", ending[session.title] || `Тренировка «${session.title}» завершена`));
+  const stats = element("div", "result-stats");
+  for (const [label, value] of [["Время", duration], ["Упражнений", String(used.length)], ["Подходов", String(setCount)], [isRun(session) ? "Активность" : "Объём", isRun(session) ? `${formatNumber(used.reduce((sum, exercise) => sum + exercise.sets.reduce((total, set) => total + number(set.reps), 0), 0))} мин` : `${formatNumber(summary.volume)} кг`]]) {
+    const card = element("div", "result-stat"); card.append(element("span", "", label), element("strong", "", value)); stats.append(card);
+  }
+  target.append(stats);
+  const gains = element("div", "result-gains");
+  gains.append(element("h3", "", summary.highlights.length ? "Новые результаты" : "Новая точка в истории"));
+  if (summary.highlights.length) {
+    for (const exercise of used) {
+      const prior = exerciseHistory(data.sessions.filter(item => item.id !== session.id && (item.date < session.date || item.date === session.date && (item.createdAt || 0) < (session.createdAt || 0))), exercise.name).at(-1);
+      if (!prior) continue;
+      const oldSet = bestSet(prior.sets), newSet = bestSet(exercise.sets);
+      if (!oldSet || !newSet) continue;
+      const improved = Number(newSet.weight) > Number(oldSet.weight) || Number(newSet.weight) === Number(oldSet.weight) && Number(newSet.reps) > Number(oldSet.reps);
+      if (improved) { const item = element("div", "result-gain"); item.append(element("strong", "", exercise.name), element("span", "", `${setText(oldSet, isRun(session))} → ${setText(newSet, isRun(session))}`)); gains.append(item); }
+    }
+  }
+  if (!gains.querySelector(".result-gain")) gains.append(element("p", "", "Результат сохранён. Следующие занятия помогут увидеть изменения."));
+  target.append(gains);
+  if (summary.records) target.append(element("p", "result-records", `${summary.records} ${recordPhrase(summary.records)}`));
+  if (summary.volumeChange > 0) target.append(element("p", "result-volume", `Общий объём тренировки: +${summary.volumeChange}% к прошлому такому занятию.`));
+  const actions = element("div", "result-actions");
+  const overview = element("a", "button button-dark", "К обзору ↗"); overview.href = "#overview";
+  const history = element("a", "small-button", "История тренировок"); history.href = "#training";
+  actions.append(overview, history); target.append(actions);
+}
 function renderTimer() {
   const remaining = timerEnd ? Math.max(0, Math.ceil((timerEnd - Date.now()) / 1000)) : restSeconds;
   const display = `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(remaining % 60).padStart(2, "0")}`;
@@ -534,17 +933,18 @@ function startTimer(seconds) {
   localStorage.setItem(TIMER_KEY, String(timerEnd));
   renderTimer();
 }
-function render() { renderTemplates(); renderWorkouts(); renderFood(); renderTimer(); }
+function render() { renderTemplates(); renderWorkouts(); renderFood(); renderTimer(); renderHero(); renderFlow(); renderLive(); renderResult(); }
 function navigate() {
   const requested = location.hash.slice(1);
-  const page = ["overview", "training", "nutrition", "learn"].includes(requested) ? requested : "overview";
+  const page = ["overview", "training", "nutrition", "learn", "workout-flow", "workout-live", "workout-result"].includes(requested) ? requested : "overview";
   document.querySelectorAll(".page").forEach(node => node.classList.toggle("active", node.id === page));
+  document.body.classList.toggle("immersive", ["workout-flow", "workout-live", "workout-result"].includes(page));
   document.querySelectorAll("[data-page]").forEach(node => {
     const active = node.dataset.page === page;
     node.classList.toggle("active", active);
     if (active) node.setAttribute("aria-current", "page"); else node.removeAttribute("aria-current");
   });
-  document.querySelector("#page-title").textContent = ({ overview: "Обзор", training: "Тренировки", nutrition: "Питание", learn: "База знаний" })[page];
+  document.querySelector("#page-title").textContent = ({ overview: "Обзор", training: "Тренировки", nutrition: "Питание", learn: "База знаний", "workout-flow": "Новая тренировка", "workout-live": "Тренировка", "workout-result": "Результат" })[page];
   window.scrollTo(0, 0);
 }
 
@@ -555,6 +955,20 @@ document.querySelector("#food-view-date").value = today();
 document.querySelector("#food-view-date").addEventListener("change", renderFood);
 document.querySelector("#exercise-select").addEventListener("change", event => { selectedExercise = event.currentTarget.value; renderExerciseHistory(); });
 document.querySelector("#auto-rest").addEventListener("change", event => { autoRest = event.currentTarget.checked; localStorage.setItem(AUTO_REST_KEY, String(autoRest)); });
+document.querySelector("#hero-start").addEventListener("click", event => {
+  event.preventDefault();
+  if (activeSession()) location.hash = "#workout-live";
+  else if (repeatCandidate()) startFlowSession(repeatCandidate());
+  else openFlow();
+});
+document.querySelector("#hero-new").addEventListener("click", () => openFlow());
+document.querySelector("#training-start").addEventListener("click", () => openFlow());
+document.querySelector("#flow-next").addEventListener("click", flowNext);
+document.querySelector("#flow-back").addEventListener("click", () => { if (flowDraft.step === 1) location.hash = "#overview"; else { flowDraft.step--; renderFlow(); window.scrollTo(0, 0); } });
+document.querySelector("#flow-close").addEventListener("click", () => location.hash = "#overview");
+document.querySelector("#live-finish").addEventListener("click", () => { document.querySelector("#live-confirm").hidden = false; document.querySelector("#live-confirm-cancel").focus(); });
+document.querySelector("#live-confirm-cancel").addEventListener("click", () => document.querySelector("#live-confirm").hidden = true);
+document.querySelector("#live-confirm-yes").addEventListener("click", finishLiveWorkout);
 document.querySelector("#session-form").addEventListener("submit", event => {
   event.preventDefault();
   if (activeSession()) return;
@@ -580,6 +994,6 @@ document.querySelector("#food-form").addEventListener("submit", event => {
   save(); form.reset(); document.querySelector("#food-date").value = today(); document.querySelector("#food-view-date").value = values.date; render();
 });
 window.addEventListener("hashchange", navigate);
-setInterval(renderTimer, 1000);
+setInterval(() => { renderTimer(); updateLiveDuration(); renderLiveRest(); }, 1000);
 render(); navigate();
 if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("./sw.js").catch(() => {});

@@ -32,7 +32,7 @@
 
         <section class="page active" id="overview" aria-labelledby="page-title">
           <div class="hero">
-            <div><span class="hero-kicker">НАЧНИ С СЕГОДНЯ</span><h2>Твой темп.<br /><em>Твой прогресс.</em></h2><p>Записывай тренировки и питание. Смотри, как усилия превращаются в результат.</p><a class="button button-light" href="#training">Записать тренировку <span>↗</span></a></div>
+            <div><span class="hero-kicker">НАЧНИ С СЕГОДНЯ</span><h2>Твой темп.<br /><em>Твой прогресс.</em></h2><p>Записывай тренировки и питание. Смотри, как усилия превращаются в результат.</p><a class="button button-light" id="hero-start" href="#workout-flow">Начать тренировку <span>↗</span></a><button class="hero-secondary" id="hero-new" type="button" hidden>Новая тренировка</button></div>
             <div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="art-core">↑</div><div class="art-label">ДВИГАЙСЯ<br />ВПЕРЁД</div></div>
           </div>
           <div class="section-heading"><div><div class="eyebrow">ГЛАВНОЕ ЗА СЕГОДНЯ</div><h2>Всё под контролем</h2></div></div>
@@ -50,7 +50,9 @@
         </section>
 
         <section class="page" id="training" aria-label="Тренировки">
-          <div class="page-intro"><div><div class="eyebrow">ТВОЙ ДНЕВНИК</div><h2>Каждый подход<br />имеет значение.</h2><p>Выбери готовый день или создай свой. Во время занятия записывай подходы за пару касаний.</p></div><div class="intro-badge">01 / ДВИЖЕНИЕ</div></div>
+          <div class="page-intro"><div><div class="eyebrow">ТВОЙ ДНЕВНИК</div><h2>Каждый подход<br />имеет значение.</h2><p>Здесь хранится история занятий, упражнений и прогресса. Новую тренировку можно начать за три коротких шага.</p></div><div class="intro-badge">01 / ДВИЖЕНИЕ</div></div>
+          <section class="panel training-launch"><div><div class="eyebrow">БЫСТРЫЙ СТАРТ</div><h3>Готов к тренировке?</h3><p>Выбери группу мышц, проверь упражнения и начинай. Прошлые результаты уже будут под рукой.</p></div><button class="button button-dark" id="training-start" type="button">Начать тренировку <span>↗</span></button></section>
+          <div id="legacy-training-controls" hidden>
           <section class="panel template-panel"><div class="panel-head"><div><div class="eyebrow">ГОТОВЫЕ ДНИ</div><h3>Шаблоны тренировок</h3></div></div><div id="template-list" class="template-grid"></div></section>
           <div class="two-column training-layout">
             <section class="panel form-panel"><div class="panel-head"><div><div class="eyebrow">ПОДГОТОВКА</div><h3>Начать занятие</h3></div></div><form id="session-form"><label>Название тренировки <input name="title" type="text" maxlength="80" placeholder="Например, день ног" required /></label><div class="form-row"><label>Дата <input id="workout-date" name="date" type="date" required /></label><label>Вид активности <select name="activity"><option value="Силовая">Силовая</option><option value="Кроссфит">Кроссфит</option><option value="Бег">Бег</option><option value="Другая">Другая</option></select></label></div><button class="button button-dark" type="submit">Начать тренировку <span>↗</span></button><p class="form-help">Выбранный шаблон подскажет упражнения. Их можно менять и дополнять.</p></form></section>
@@ -58,10 +60,21 @@
           </div>
           <section id="active-session" class="panel active-session" hidden></section>
           <section id="finish-summary" class="panel summary-panel" hidden></section>
+          </div>
           <section class="panel log-panel session-history"><div class="panel-head"><div><div class="eyebrow">ТВОЙ ПУТЬ</div><h3>История тренировок</h3></div><span class="count-badge" id="workout-count">0 записей</span></div><div id="workout-list" class="empty-state">Здесь появятся твои тренировки.</div></section>
           <section class="panel progress-panel"><div class="panel-head"><div><div class="eyebrow">ПО КАЖДОМУ УПРАЖНЕНИЮ</div><h3>Личная история</h3></div></div><label class="history-date-label">Открыть упражнение <select id="exercise-select"><option value="">Выбери упражнение</option></select></label><div id="exercise-detail" class="empty-state">Выбери упражнение, чтобы увидеть все подходы, рекорды и график.</div></section>
           <section class="panel progress-panel"><div class="panel-head"><div><div class="eyebrow">ДИНАМИКА</div><h3>Прогресс и частота</h3></div></div><div id="progress-list" class="empty-state">После нескольких тренировок здесь появятся изменения по упражнениям.</div><div id="group-list"></div><p class="form-help">Объём = вес × повторения по всем подходам. Процент показывает изменение записанного объёма за последние 4 недели к предыдущим 4 неделям; это не измерение роста мышц.</p></section>
         </section>
+
+        <section class="page" id="workout-flow" aria-label="Подготовка тренировки">
+          <div class="flow-shell"><header class="flow-top"><button class="flow-back" id="flow-back" type="button">← Назад</button><span id="flow-counter">Шаг 1 из 3</span><button class="flow-close" id="flow-close" type="button">Закрыть</button></header><div class="flow-progress" aria-hidden="true"><span id="flow-progress-fill"></span></div><div id="flow-content"></div><button class="button button-dark flow-primary" id="flow-next" type="button" disabled>Далее <span>↗</span></button></div>
+        </section>
+
+        <section class="page" id="workout-live" aria-label="Активная тренировка">
+          <div class="live-shell"><header class="live-top"><div><div class="eyebrow">ТРЕНИРОВКА ИДЁТ</div><h2 id="live-title">Тренировка</h2><span id="live-duration">00:00:00</span></div><button class="live-finish" id="live-finish" type="button">Завершить тренировку</button></header><div id="live-exercise-nav" class="live-exercise-nav"></div><div id="live-content"></div></div><div class="live-confirm" id="live-confirm" hidden><div class="live-confirm-card" role="dialog" aria-modal="true" aria-labelledby="live-confirm-title"><div class="eyebrow">ЗАВЕРШЕНИЕ</div><h3 id="live-confirm-title">Завершить тренировку?</h3><p>Записанные подходы сохранятся, и ты увидишь результат занятия.</p><div><button type="button" id="live-confirm-cancel">Продолжить занятие</button><button type="button" id="live-confirm-yes">Завершить тренировку</button></div></div></div>
+        </section>
+
+        <section class="page" id="workout-result" aria-label="Результат тренировки"><div class="result-shell" id="result-content"></div></section>
 
         <section class="page" id="nutrition" aria-label="Питание">
           <div class="page-intro"><div><div class="eyebrow">ТОПЛИВО ДЛЯ ТЕЛА</div><h2>Питание<br />без догадок.</h2><p>Фиксируй блюда и их калории, белки, жиры и углеводы. Дневные суммы посчитаются автоматически.</p></div><div class="intro-badge">02 / ПИТАНИЕ</div></div>

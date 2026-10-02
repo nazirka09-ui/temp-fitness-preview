@@ -9,6 +9,15 @@ export const estimatedMax = set => {
 };
 export const dayDistance = (from, to) => Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86400000);
 
+export function repeatWorkoutCandidate(sessions, groupForSession) {
+  const completed = sessions.filter(session => session.status !== "active" && session.exercises.some(exercise => exercise.sets.length))
+    .sort((a, b) => a.date.localeCompare(b.date) || (a.createdAt || 0) - (b.createdAt || 0));
+  const last = completed.at(-1);
+  if (!last?.exercises.length) return null;
+  const signature = session => `${groupForSession(session)}:${session.exercises.map(exercise => exerciseKey(exercise.name)).join("|")}`;
+  return completed.filter(session => signature(session) === signature(last)).length >= 5 ? last : null;
+}
+
 export function exerciseHistory(sessions, name, omitSessionId = null) {
   const key = exerciseKey(name);
   return sessions.filter(session => session.id !== omitSessionId).flatMap(session =>
