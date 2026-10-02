@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#101b18" />
+    <meta name="description" content="Дневник тренировок и питания для активной жизни." />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+    <title>Темп — тренировки и питание</title>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Навигация">
+        <a class="brand" href="#overview" aria-label="Темп, главная"><span class="brand-mark">↗</span><span>темп<span class="brand-dot">.</span></span></a>
+        <div class="sidebar-caption">ЛИЧНЫЙ ТРЕКЕР</div>
+        <nav class="nav-list" id="desktop-nav">
+          <a href="#overview" data-page="overview"><span>◫</span> Обзор</a>
+          <a href="#training" data-page="training"><span>▥</span> Тренировки</a>
+          <a href="#nutrition" data-page="nutrition"><span>◉</span> Питание</a>
+          <a href="#learn" data-page="learn"><span>◇</span> База знаний</a>
+        </nav>
+        <div class="sidebar-bottom"><span class="pulse-dot"></span> Маленькие шаги. Сильный результат.</div>
+      </aside>
+
+      <main id="main-content">
+        <header class="topbar">
+          <div><div class="eyebrow">ТВОЁ ПРОСТРАНСТВО ДЛЯ РОСТА</div><h1 id="page-title">Обзор</h1></div>
+          <div class="date-chip" id="today-label"></div>
+        </header>
+
+        <section class="page active" id="overview" aria-labelledby="page-title">
+          <div class="hero">
+            <div><span class="hero-kicker">НАЧНИ С СЕГОДНЯ</span><h2>Твой темп.<br /><em>Твой прогресс.</em></h2><p>Записывай тренировки и питание. Смотри, как усилия превращаются в результат.</p><a class="button button-light" href="#training">Записать тренировку <span>↗</span></a></div>
+            <div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="art-core">↑</div><div class="art-label">ДВИГАЙСЯ<br />ВПЕРЁД</div></div>
+          </div>
+          <div class="section-heading"><div><div class="eyebrow">ГЛАВНОЕ ЗА СЕГОДНЯ</div><h2>Всё под контролем</h2></div></div>
+          <div class="stats-grid">
+            <article class="stat-card"><div class="stat-icon lime">▥</div><span>Тренировок всего</span><strong id="stat-workouts">0</strong><small>каждая запись имеет значение</small></article>
+            <article class="stat-card"><div class="stat-icon peach">↗</div><span>Рабочих подходов</span><strong id="stat-sets">0</strong><small>путь складывается из повторений</small></article>
+            <article class="stat-card"><div class="stat-icon lavender">◉</div><span>Калории сегодня</span><strong id="stat-calories">0 <i>ккал</i></strong><small id="stat-macros">Б 0 · Ж 0 · У 0 г</small></article>
+          </div>
+          <div class="two-column">
+            <article class="panel"><div class="panel-head"><div><div class="eyebrow">ИСТОРИЯ</div><h3>Последние тренировки</h3></div><a href="#training">Все записи ↗</a></div><div id="recent-workouts" class="empty-state">Пока нет записей. Начни с первой тренировки.</div></article>
+            <article class="panel idea-panel"><div class="eyebrow">НАПОМИНАНИЕ</div><div class="quote-mark">“</div><p>Прогресс — это не идеальная неделя, а привычка возвращаться к движению.</p><span>СЕГОДНЯ — ХОРОШИЙ ДЕНЬ, ЧТОБЫ НАЧАТЬ</span></article>
+          </div>
+        </section>
+
+        <section class="page" id="training" aria-label="Тренировки">
+          <div class="page-intro"><div><div class="eyebrow">ТВОЙ ДНЕВНИК</div><h2>Каждый подход<br />имеет значение.</h2><p>Записывай упражнения, веса и повторения. История поможет увидеть реальный рост.</p></div><div class="intro-badge">01 / ДВИЖЕНИЕ</div></div>
+          <div class="two-column training-layout">
+            <section class="panel form-panel"><div class="panel-head"><div><div class="eyebrow">НОВАЯ ЗАПИСЬ</div><h3>Добавить подход</h3></div></div>
+              <form id="workout-form">
+                <label>Дата <input id="workout-date" name="date" type="date" required /></label>
+                <label>Вид активности <select name="activity" required><option value="Силовая">Силовая</option><option value="Кроссфит">Кроссфит</option><option value="Бег">Бег</option><option value="Другая">Другая</option></select></label>
+                <label>Упражнение или активность <input name="exercise" type="text" maxlength="80" placeholder="Например, жим лёжа или бег" required /></label>
+                <div class="form-row"><label>Вес, кг <input name="weight" type="number" min="0" max="1000" step="0.5" placeholder="0" /></label><label>Повторения / минуты <input name="reps" type="number" min="1" max="10000" step="1" placeholder="10" required /></label></div>
+                <label>Заметка <input name="note" type="text" maxlength="160" placeholder="Самочувствие, темп, техника…" /></label>
+                <button class="button button-dark" type="submit">Сохранить подход <span>↗</span></button>
+                <p class="form-help">Для бега укажи минуты вместо повторений, вес оставь пустым.</p>
+              </form>
+            </section>
+            <section class="panel log-panel"><div class="panel-head"><div><div class="eyebrow">ТВОЙ ПУТЬ</div><h3>История подходов</h3></div><span class="count-badge" id="workout-count">0 записей</span></div><div id="workout-list" class="empty-state">Здесь появятся твои тренировки.</div></section>
+          </div>
+          <section class="panel progress-panel"><div class="panel-head"><div><div class="eyebrow">ДИНАМИКА</div><h3>Рост рабочих весов</h3></div></div><div id="progress-list" class="empty-state">Запиши упражнение с весом хотя бы дважды, чтобы увидеть изменение.</div></section>
+        </section>
+
+        <section class="page" id="nutrition" aria-label="Питание">
+          <div class="page-intro"><div><div class="eyebrow">ТОПЛИВО ДЛЯ ТЕЛА</div><h2>Питание<br />без догадок.</h2><p>Фиксируй блюда и их калории, белки, жиры и углеводы. Дневные суммы посчитаются автоматически.</p></div><div class="intro-badge">02 / ПИТАНИЕ</div></div>
+          <div class="macro-grid"><div class="macro-card"><span>КАЛОРИИ</span><strong id="total-calories">0</strong><small>ккал <span class="macro-period">сегодня</span></small></div><div class="macro-card"><span>БЕЛКИ</span><strong id="total-protein">0</strong><small>г <span class="macro-period">сегодня</span></small></div><div class="macro-card"><span>ЖИРЫ</span><strong id="total-fat">0</strong><small>г <span class="macro-period">сегодня</span></small></div><div class="macro-card"><span>УГЛЕВОДЫ</span><strong id="total-carbs">0</strong><small>г <span class="macro-period">сегодня</span></small></div></div>
+          <div class="two-column training-layout"><section class="panel form-panel"><div class="panel-head"><div><div class="eyebrow">НОВАЯ ЗАПИСЬ</div><h3>Добавить приём пищи</h3></div></div><form id="food-form"><label>Дата <input id="food-date" name="date" type="date" required /></label><label>Блюдо или продукт <input name="name" type="text" maxlength="80" placeholder="Например, овсянка" required /></label><div class="form-row"><label>Калории <input name="calories" type="number" min="0" max="10000" step="1" required /></label><label>Белки, г <input name="protein" type="number" min="0" max="1000" step="0.1" required /></label></div><div class="form-row"><label>Жиры, г <input name="fat" type="number" min="0" max="1000" step="0.1" required /></label><label>Углеводы, г <input name="carbs" type="number" min="0" max="1000" step="0.1" required /></label></div><button class="button button-dark" type="submit">Добавить в дневник <span>↗</span></button><p class="form-help">Значения возьми с упаковки или из проверенного справочника продуктов.</p></form></section><section class="panel log-panel"><div class="panel-head"><div><div class="eyebrow">РАЦИОН</div><h3>Записи за <span id="food-list-date">сегодня</span></h3></div></div><label class="history-date-label">Посмотреть дату <input id="food-view-date" type="date" /></label><div id="food-list" class="empty-state">Пока нет записей за сегодня.</div></section></div>
+        </section>
+
+        <section class="page" id="learn" aria-label="База знаний"><div class="page-intro"><div><div class="eyebrow">УЧИСЬ В СВОЁМ ТЕМПЕ</div><h2>Сильный старт<br />начинается с основ.</h2><p>Короткие ориентиры для тех, кто только выстраивает привычку тренироваться.</p></div><div class="intro-badge">03 / ЗНАНИЯ</div></div><div class="knowledge-grid"><article class="knowledge-card"><span>01 / СИЛОВЫЕ</span><h3>Начни с техники</h3><p>Подбирай вес, при котором можешь сохранять контроль движения. Записывай подходы и увеличивай нагрузку постепенно.</p></article><article class="knowledge-card"><span>02 / БЕГ</span><h3>Темп важнее рывка</h3><p>Первые пробежки делай комфортными. Чередуй бег и ходьбу, отмечай время и самочувствие.</p></article><article class="knowledge-card"><span>03 / ВОССТАНОВЛЕНИЕ</span><h3>Отдых — часть плана</h3><p>Оставляй время на сон и восстановление. Усталость и боль — сигнал пересмотреть нагрузку.</p></article></div><div class="roadmap-note"><div><span>СКОРО В ТЕМПЕ</span><h3>Библиотека упражнений с наглядной техникой</h3><p>Добавим видео и пошаговые инструкции после проверки материалов со специалистами.</p></div><span class="roadmap-arrow">↗</span></div></section>
+      </main>
+      <nav class="mobile-nav" aria-label="Мобильная навигация"><a href="#overview" data-page="overview"><span>◫</span>Обзор</a><a href="#training" data-page="training"><span>▥</span>Тренировки</a><a href="#nutrition" data-page="nutrition"><span>◉</span>Питание</a><a href="#learn" data-page="learn"><span>◇</span>Знания</a></nav>
+    </div>
+    <script src="./app.js" defer></script>
+  </body>
+</html>
