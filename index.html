@@ -41,10 +41,12 @@
             <article class="stat-card"><div class="stat-icon peach">↗</div><span>Рабочих подходов</span><strong id="stat-sets">0</strong><small>путь складывается из повторений</small></article>
             <article class="stat-card"><div class="stat-icon lavender">◉</div><span>Калории сегодня</span><strong id="stat-calories">0 <i>ккал</i></strong><small id="stat-macros">Б 0 · Ж 0 · У 0 г</small></article>
           </div>
+          <section class="panel today-panel"><div class="eyebrow">СЕГОДНЯШНИЙ ОРИЕНТИР</div><div id="today-plan" class="empty-state">Запиши тренировку, и здесь появится подсказка по следующему занятию.</div></section>
           <div class="two-column">
             <article class="panel"><div class="panel-head"><div><div class="eyebrow">ИСТОРИЯ</div><h3>Последние тренировки</h3></div><a href="#training">Все записи ↗</a></div><div id="recent-workouts" class="empty-state">Пока нет записей. Начни с первой тренировки.</div></article>
-            <article class="panel timer-panel"><div class="eyebrow">МЕЖДУ ПОДХОДАМИ</div><h3>Время отдохнуть</h3><div class="timer-display" data-timer-display role="timer" aria-label="Оставшееся время отдыха">02:00</div><p data-timer-status>Выбери время и запусти таймер.</p><div class="timer-actions"><button type="button" data-timer-start="60">1 мин</button><button type="button" data-timer-start="120" class="selected">2 мин</button><button type="button" data-timer-start="180">3 мин</button><button type="button" data-timer-stop>Сбросить</button></div></article>
+            <article class="panel timer-panel"><div class="eyebrow">МЕЖДУ ПОДХОДАМИ</div><h3>Время отдохнуть</h3><div class="timer-display" data-timer-display role="timer" aria-label="Оставшееся время отдыха">02:00</div><p data-timer-status>Выбери время и запусти таймер.</p><div class="timer-actions"><button type="button" data-timer-start="60">1 мин</button><button type="button" data-timer-start="90">1,5 мин</button><button type="button" data-timer-start="120" class="selected">2 мин</button><button type="button" data-timer-start="180">3 мин</button><button type="button" data-timer-stop>Сбросить</button></div></article>
           </div>
+          <section class="panel summary-panel" id="latest-summary" hidden></section>
         </section>
 
         <section class="page" id="training" aria-label="Тренировки">
@@ -52,11 +54,13 @@
           <section class="panel template-panel"><div class="panel-head"><div><div class="eyebrow">ГОТОВЫЕ ДНИ</div><h3>Шаблоны тренировок</h3></div></div><div id="template-list" class="template-grid"></div></section>
           <div class="two-column training-layout">
             <section class="panel form-panel"><div class="panel-head"><div><div class="eyebrow">ПОДГОТОВКА</div><h3>Начать занятие</h3></div></div><form id="session-form"><label>Название тренировки <input name="title" type="text" maxlength="80" placeholder="Например, день ног" required /></label><div class="form-row"><label>Дата <input id="workout-date" name="date" type="date" required /></label><label>Вид активности <select name="activity"><option value="Силовая">Силовая</option><option value="Кроссфит">Кроссфит</option><option value="Бег">Бег</option><option value="Другая">Другая</option></select></label></div><button class="button button-dark" type="submit">Начать тренировку <span>↗</span></button><p class="form-help">Выбранный шаблон подскажет упражнения. Их можно менять и дополнять.</p></form></section>
-            <section class="panel timer-panel training-timer"><div class="eyebrow">МЕЖДУ ПОДХОДАМИ</div><h3>Таймер отдыха</h3><div class="timer-display" data-timer-display role="timer" aria-label="Оставшееся время отдыха">02:00</div><p data-timer-status>Выбери время и запусти таймер.</p><div class="timer-actions"><button type="button" data-timer-start="60">1 мин</button><button type="button" data-timer-start="120" class="selected">2 мин</button><button type="button" data-timer-start="180">3 мин</button><button type="button" data-timer-stop>Сбросить</button></div></section>
+            <section class="panel timer-panel training-timer"><div class="eyebrow">МЕЖДУ ПОДХОДАМИ</div><h3>Таймер отдыха</h3><div class="timer-display" data-timer-display role="timer" aria-label="Оставшееся время отдыха">02:00</div><p data-timer-status>Выбери время и запусти таймер.</p><div class="timer-actions"><button type="button" data-timer-start="60">1 мин</button><button type="button" data-timer-start="90">1,5 мин</button><button type="button" data-timer-start="120" class="selected">2 мин</button><button type="button" data-timer-start="180">3 мин</button><button type="button" data-timer-stop>Сбросить</button></div><label class="auto-rest-label"><input type="checkbox" id="auto-rest" checked /> Автоматически запускать после подхода</label></section>
           </div>
           <section id="active-session" class="panel active-session" hidden></section>
+          <section id="finish-summary" class="panel summary-panel" hidden></section>
           <section class="panel log-panel session-history"><div class="panel-head"><div><div class="eyebrow">ТВОЙ ПУТЬ</div><h3>История тренировок</h3></div><span class="count-badge" id="workout-count">0 записей</span></div><div id="workout-list" class="empty-state">Здесь появятся твои тренировки.</div></section>
-          <section class="panel progress-panel"><div class="panel-head"><div><div class="eyebrow">ДИНАМИКА</div><h3>Рост рабочих весов</h3></div></div><div id="progress-list" class="empty-state">Повтори упражнение с весом в двух тренировках, чтобы увидеть изменение.</div></section>
+          <section class="panel progress-panel"><div class="panel-head"><div><div class="eyebrow">ПО КАЖДОМУ УПРАЖНЕНИЮ</div><h3>Личная история</h3></div></div><label class="history-date-label">Открыть упражнение <select id="exercise-select"><option value="">Выбери упражнение</option></select></label><div id="exercise-detail" class="empty-state">Выбери упражнение, чтобы увидеть все подходы, рекорды и график.</div></section>
+          <section class="panel progress-panel"><div class="panel-head"><div><div class="eyebrow">ДИНАМИКА</div><h3>Прогресс и частота</h3></div></div><div id="progress-list" class="empty-state">После нескольких тренировок здесь появятся изменения по упражнениям.</div><div id="group-list"></div><p class="form-help">Объём = вес × повторения по всем подходам. Процент показывает изменение записанного объёма за последние 4 недели к предыдущим 4 неделям; это не измерение роста мышц.</p></section>
         </section>
 
         <section class="page" id="nutrition" aria-label="Питание">
@@ -69,6 +73,6 @@
       </main>
       <nav class="mobile-nav" aria-label="Мобильная навигация"><a href="#overview" data-page="overview"><span>◫</span>Обзор</a><a href="#training" data-page="training"><span>▥</span>Тренировки</a><a href="#nutrition" data-page="nutrition"><span>◉</span>Питание</a><a href="#learn" data-page="learn"><span>◇</span>Знания</a></nav>
     </div>
-    <script src="./app.js" defer></script>
+    <script src="./app.js" type="module"></script>
   </body>
 </html>
