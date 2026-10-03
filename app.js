@@ -1,4 +1,4 @@
-import { GROUPS, exerciseKey, exerciseHistory, sessionVolume, groupOverview, suggestedGoal, recordChanges, sessionSummary, plateauDetected, estimatedMax, bestSet, dayDistance, repeatWorkoutCandidate } from "./metrics.mjs?v=2";
+import { GROUPS, exerciseKey, exerciseHistory, sessionVolume, groupOverview, suggestedGoal, recordChanges, sessionSummary, plateauDetected, estimatedMax, bestSet, dayDistance, repeatWorkoutCandidate } from "./metrics.mjs?v=3";
 
 const STORAGE_KEY = "temp-health-v1";
 const TIMER_KEY = "temp-rest-timer-v1";
@@ -12,8 +12,13 @@ const TEMPLATES = [
   { id: "full", title: "Всё тело", activity: "Силовая", exercises: ["Приседания", "Жим лёжа", "Тяга верхнего блока", "Планка"] },
   { id: "run", title: "Пробежка", activity: "Бег", exercises: ["Лёгкий бег", "Интервальный бег", "Ходьба"] },
 ];
-const CATALOG = [...new Set([...TEMPLATES.flatMap(template => template.exercises), "Приседания со штангой", "Выпады с гантелями", "Подъёмы на носки", "Молотковые сгибания", "Французский жим", "Становая тяга"])];
-const FLOW_GROUPS = ["Грудь", "Спина", "Ноги", "Плечи", "Руки", "Всё тело", "Своя тренировка"];
+// The knowledge library is the single source for guided exercise choices.
+const LIBRARY_GROUPS = { legs: "Ноги", glutes: "Ягодицы", back: "Спина", chest: "Грудь", shoulders: "Плечи", arms: "Руки", core: "Кор" };
+const EXERCISE_LIBRARY = Object.entries(LIBRARY_GROUPS).flatMap(([id, group]) =>
+  [...document.querySelectorAll("#muscle-" + id + " .exercise-guide h4")].map(node => ({ name: node.textContent.trim(), group }))
+);
+const CATALOG = [...new Set([...EXERCISE_LIBRARY.map(exercise => exercise.name), ...TEMPLATES.flatMap(template => template.exercises), "Приседания со штангой", "Выпады с гантелями", "Подъёмы на носки", "Молотковые сгибания", "Французский жим", "Становая тяга"])];
+const FLOW_GROUPS = ["Грудь", "Спина", "Ноги", "Ягодицы", "Плечи", "Руки", "Кор", "Всё тело", "Своя тренировка"];
 const FLOW_DEFAULTS = {
   "Грудь": ["Жим лёжа", "Жим гантелей лёжа", "Разведение гантелей", "Отжимания"],
   "Спина": ["Тяга верхнего блока", "Тяга штанги в наклоне", "Горизонтальная тяга", "Подтягивания"],
@@ -23,6 +28,8 @@ const FLOW_DEFAULTS = {
   "Всё тело": ["Приседания", "Жим лёжа", "Тяга верхнего блока", "Планка"],
   "Своя тренировка": [],
 };
+FLOW_DEFAULTS["Ягодицы"] = EXERCISE_LIBRARY.filter(entry => entry.group === "Ягодицы").map(entry => entry.name);
+FLOW_DEFAULTS["Кор"] = EXERCISE_LIBRARY.filter(entry => entry.group === "Кор").map(entry => entry.name);
 const GROUP_BY_EXERCISE = new Map([
   ...TEMPLATES[0].exercises.map(name => [exerciseKey(name), "Ноги"]),
   ...TEMPLATES[1].exercises.map(name => [exerciseKey(name), name.includes("Сгибание рук") ? "Руки" : "Спина"]),
@@ -33,6 +40,7 @@ const GROUP_BY_EXERCISE = new Map([
   [exerciseKey("Подъёмы на носки"), "Ноги"], [exerciseKey("Молотковые сгибания"), "Руки"],
   [exerciseKey("Французский жим"), "Руки"], [exerciseKey("Становая тяга"), "Спина"],
 ]);
+for (const exercise of EXERCISE_LIBRARY) GROUP_BY_EXERCISE.set(exerciseKey(exercise.name), exercise.group);
 const inferGroup = name => GROUP_BY_EXERCISE.get(exerciseKey(name)) || "Другое";
 const today = () => {
   const now = new Date();
@@ -678,26 +686,62 @@ function createExerciseDatalist() {
 }
 function groupSelect(selected) {
   const select = element("select"); select.name = "group";
-  for (const group of GROUPS) { const option = element("option", "", group); option.value = group; select.append(option); }
-  select.value = GROUPS.includes(selected) ? selected : "Другое";
+  for (const group of [...GROUPS, "Ягодицы"].filter((value, index, all) => all.indexOf(value) === index)) {
+    const option = element("option", "", group === "Кор" ? "Пресс и корпус" : group);
+    option.value = group; select.append(option);
+  }
+  select.value = [...GROUPS, "Ягодицы"].includes(selected) ? selected : "Другое";
   return select;
+}
+function exercisePicker(selectedGroup, current = null, nameField = "name", excluded = []) {
+  const nameLabel = element("label", "exercise-picker-label", "Упражнение");
+  const select = element("select"); select.name = "exerciseChoice"; select.required = true;
+  const name = element("input"); name.name = nameField; name.maxLength = 80;
+  name.placeholder = "Название своего упражнения";
+  name.setAttribute("aria-label", "Название своего упражнения");
+  const groupLabel = element("label", "", "Группа мышц");
+  const group = groupSelect(current?.group || selectedGroup); groupLabel.append(group);
+  function sync() {
+    const custom = select.value === "__custom";
+    name.hidden = !custom; name.required = custom;
+    if (!custom) name.value = select.value;
+    name.setCustomValidity("");
+  }
+  function options(initial = null) {
+    select.replaceChildren();
+    const placeholder = element("option", "", "Выбери упражнение"); placeholder.value = "";
+    select.append(placeholder);
+    const entries = EXERCISE_LIBRARY.filter(entry => entry.group === group.value);
+    for (const entry of entries) {
+      const option = element("option", "", entry.name); option.value = entry.name;
+      option.disabled = excluded.some(value => exerciseKey(value) === exerciseKey(entry.name));
+      select.append(option);
+    }
+    const custom = element("option", "", "Другое — своё упражнение"); custom.value = "__custom"; select.append(custom);
+    select.value = initial && entries.some(entry => entry.name === initial) ? initial : initial ? "__custom" : "";
+    sync();
+    if (select.value === "__custom") name.value = initial || "";
+  }
+  group.addEventListener("change", () => options());
+  select.addEventListener("change", () => { name.value = ""; sync(); if (select.value === "__custom") name.focus(); });
+  name.addEventListener("input", () => name.setCustomValidity(name.value.trim() ? "" : "Укажи название упражнения."));
+  nameLabel.append(select, name);
+  options(current?.name);
+  return { nameLabel, groupLabel, name, group, select };
 }
 function exerciseEditorForm(current = null, onSave) {
   const form = element("form", "flow-exercise-form");
-  const nameLabel = element("label", "", current ? "Новое упражнение" : "Добавить упражнение");
-  const name = element("input"); name.name = "name"; name.type = "text"; name.required = true; name.maxLength = 80; name.placeholder = "Название упражнения"; name.setAttribute("list", "flow-exercise-options"); name.value = current?.name || "";
-  nameLabel.append(name);
-  const groupLabel = element("label", "", "Группа");
-  const group = groupSelect(current?.group || (GROUPS.includes(flowDraft.group) ? flowDraft.group : "Другое"));
-  groupLabel.append(group);
-  name.addEventListener("input", () => { const inferred = inferGroup(name.value); if (inferred !== "Другое") group.value = inferred; });
+  const picker = exercisePicker(flowDraft.group, current, "name",
+    flowDraft.exercises.filter((entry, index) => index !== flowDraft.replacingIndex).map(entry => entry.name));
   const submit = element("button", "small-button", current ? "Заменить" : "Добавить"); submit.type = "submit";
-  form.append(nameLabel, groupLabel, submit);
+  form.append(picker.nameLabel, picker.groupLabel, submit);
   form.addEventListener("submit", event => {
     event.preventDefault();
-    const value = name.value.trim();
-    if (!value || flowDraft.exercises.some((exercise, index) => exerciseKey(exercise.name) === exerciseKey(value) && index !== flowDraft.replacingIndex)) return;
-    onSave({ name: value, group: group.value, plannedSets: current?.plannedSets || 3 });
+    const value = picker.name.value.trim();
+    if (!value || flowDraft.exercises.some((exercise, index) => exerciseKey(exercise.name) === exerciseKey(value) && index !== flowDraft.replacingIndex)) {
+      picker.name.setCustomValidity("Это упражнение уже есть в тренировке."); picker.name.hidden = false; picker.name.reportValidity(); return;
+    }
+    onSave({ name: value, group: picker.group.value, plannedSets: current?.plannedSets || 3 });
     renderFlow();
   });
   return form;
@@ -844,23 +888,31 @@ function addLiveRestTime() {
 }
 function liveAddExerciseForm(session) {
   const form = element("form", "flow-exercise-form");
-  const label = element("label", "", "Упражнение");
-  const input = element("input"); input.name = "name"; input.required = true; input.maxLength = 80; input.placeholder = "Название упражнения"; input.setAttribute("list", "flow-exercise-options"); label.append(input);
-  const groupLabel = element("label", "", "Группа");
-  const group = groupSelect(focusGroup(session)); groupLabel.append(group);
-  input.addEventListener("input", () => { const inferred = inferGroup(input.value); if (inferred !== "Другое") group.value = inferred; });
+  const picker = exercisePicker(focusGroup(session), null, "name", session.exercises.map(entry => entry.name));
   const submit = element("button", "small-button", "Добавить"); submit.type = "submit";
-  form.append(label, groupLabel, submit);
+  form.append(picker.nameLabel, picker.groupLabel, submit);
   form.addEventListener("submit", event => {
     event.preventDefault();
-    const name = input.value.trim();
-    if (!name) return;
-    const entry = { id: uid(), name, group: group.value, plannedSets: 3, sets: [] };
-    session.exercises.push(entry);
-    session.currentExerciseId = entry.id;
+    const name = picker.name.value.trim();
+    if (!name || session.exercises.some(entry => exerciseKey(entry.name) === exerciseKey(name))) {
+      picker.name.setCustomValidity("Это упражнение уже есть в тренировке."); picker.name.hidden = false; picker.name.reportValidity(); return;
+    }
+    const entry = { id: uid(), name, group: picker.group.value, plannedSets: 3, sets: [] };
+    if (liveRest) skipLiveRest();
+    session.exercises.push(entry); session.currentExerciseId = entry.id;
     save(); render();
   });
   return form;
+}
+function removeLiveExercise(session, exercise) {
+  if (exercise.sets.length && !confirm(`Убрать «${exercise.name}» и записанные для него подходы из этой тренировки?`)) return;
+  const index = session.exercises.indexOf(exercise);
+  session.exercises = session.exercises.filter(entry => entry.id !== exercise.id);
+  if (session.currentExerciseId === exercise.id) {
+    if (liveRest) skipLiveRest();
+    session.currentExerciseId = session.exercises[Math.min(index, session.exercises.length - 1)]?.id;
+  }
+  save(); renderLive();
 }
 
 function addRecordedSet(card, source = null) {
@@ -914,17 +966,8 @@ function addRecordedExercise() {
   remove.addEventListener("click", () => { card.remove(); updateRecordedFields(); });
   header.append(heading, remove);
   const details = element("div", "form-row");
-  const nameLabel = element("label", "", "Упражнение");
-  const name = element("input"); name.name = "exerciseName"; name.required = true; name.maxLength = 80;
-  name.placeholder = "Например, жим лёжа"; name.setAttribute("list", "record-exercise-options");
-  nameLabel.append(name);
-  const groupLabel = element("label", "", "Группа мышц");
-  const group = groupSelect("Другое"); groupLabel.append(group);
-  name.addEventListener("input", () => {
-    name.setCustomValidity(name.value.trim() ? "" : "Укажи название упражнения.");
-    const inferred = inferGroup(name.value); if (inferred !== "Другое") group.value = inferred;
-  });
-  details.append(nameLabel, groupLabel);
+  const picker = exercisePicker("Ноги", null, "exerciseName");
+  details.append(picker.nameLabel, picker.groupLabel);
   const rows = element("div", "record-sets");
   const add = element("button", "small-button record-add-set", "Добавить подход"); add.type = "button";
   add.addEventListener("click", () => {
@@ -947,7 +990,7 @@ function initRecordedWorkout() {
   form.elements.activity.addEventListener("change", updateRecordedFields);
   form.elements.title.addEventListener("input", () => form.elements.title.setCustomValidity(form.elements.title.value.trim() ? "" : "Укажи название тренировки."));
   document.querySelector("#record-add-exercise").addEventListener("click", () => {
-    const card = addRecordedExercise(); card.querySelector('[name="exerciseName"]').focus();
+    const card = addRecordedExercise(); card.querySelector('[name="exerciseChoice"]').focus();
   });
   form.addEventListener("submit", event => {
     event.preventDefault();
@@ -998,14 +1041,21 @@ function renderLive() {
     button.addEventListener("click", () => { if (liveRest) skipLiveRest(); session.currentExerciseId = exercise.id; save(); renderLive(); });
     nav.append(button);
   }
+  const editor = element("details", "live-exercise-editor");
+  const editorTitle = element("summary", "", "Добавить упражнение");
+  editor.append(editorTitle, liveAddExerciseForm(session));
+  target.append(editor);
   const exercise = session.exercises.find(item => item.id === session.currentExerciseId);
   if (!exercise) {
     target.append(element("p", "empty-state", "Добавь первое упражнение, чтобы начать запись подходов."));
-    target.append(createExerciseDatalist(), liveAddExerciseForm(session));
+    editor.open = true;
     return;
   }
   const currentIndex = session.exercises.indexOf(exercise);
   target.append(element("div", "eyebrow", `УПРАЖНЕНИЕ ${currentIndex + 1} ИЗ ${session.exercises.length}`), element("h3", "live-exercise-title", exercise.name));
+  const remove = element("button", "text-button danger live-remove-exercise", "Убрать упражнение");
+  remove.type = "button"; remove.addEventListener("click", () => removeLiveExercise(session, exercise));
+  target.append(remove);
   const history = exerciseHistory(data.sessions, exercise.name, session.id);
   const previous = history.at(-1);
   const prior = previous ? bestSet(previous.sets) : null;

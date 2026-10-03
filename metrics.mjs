@@ -1,4 +1,4 @@
-export const GROUPS = ["Ноги", "Грудь", "Спина", "Плечи", "Руки", "Кор", "Другое"];
+export const GROUPS = ["Ноги", "Грудь", "Спина", "Плечи", "Руки", "Кор", "Ягодицы", "Другое"];
 export const exerciseKey = name => String(name || "").trim().toLocaleLowerCase("ru-RU");
 export const setVolume = set => Math.max(0, Number(set.weight) || 0) * Math.max(0, Number(set.reps) || 0);
 export const volumeOfSets = sets => sets.reduce((total, set) => total + setVolume(set), 0);
