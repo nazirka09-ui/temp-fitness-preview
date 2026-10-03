@@ -1198,8 +1198,9 @@ function navigate() {
   const page = ["overview", "training", "nutrition", "learn", "workout-flow", "workout-live", "workout-result", "workout-record"].includes(requested) ? requested : "overview";
   document.querySelectorAll(".page").forEach(node => node.classList.toggle("active", node.id === page));
   document.body.classList.toggle("immersive", ["workout-flow", "workout-live", "workout-result", "workout-record"].includes(page));
+  document.body.classList.toggle("workout-navigation", page === "workout-live");
   document.querySelectorAll("[data-page]").forEach(node => {
-    const active = node.dataset.page === page;
+    const active = node.dataset.page === (page === "workout-live" ? "training" : page);
     node.classList.toggle("active", active);
     if (active) node.setAttribute("aria-current", "page"); else node.removeAttribute("aria-current");
   });
