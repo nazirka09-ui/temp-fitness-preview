@@ -26,7 +26,7 @@ export function exerciseHistory(sessions, name, omitSessionId = null) {
       const topWeight = weighted.length ? Math.max(...weighted.map(set => Number(set.weight))) : 0;
       return {
         sessionId: session.id, date: session.date, createdAt: session.createdAt || 0, name: exercise.name,
-        group: exercise.group || "Другое", activity: session.activity, sets: exercise.sets,
+        group: exercise.group || "Другое", activity: session.activity, sets: exercise.sets, comment: exercise.comment || "",
         topWeight, repsAtTopWeight: Math.max(0, ...weighted.filter(set => Number(set.weight) === topWeight).map(set => Number(set.reps) || 0)),
         bestEstimate: Math.max(0, ...exercise.sets.map(set => estimatedMax(set) || 0)),
         volume: volumeOfSets(exercise.sets),

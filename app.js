@@ -1,4 +1,4 @@
-import { GROUPS, exerciseKey, exerciseHistory, sessionVolume, groupOverview, suggestedGoal, recordChanges, sessionSummary, plateauDetected, estimatedMax, bestSet, dayDistance, repeatWorkoutCandidate } from "./metrics.mjs?v=3";
+import { GROUPS, exerciseKey, exerciseHistory, sessionVolume, groupOverview, suggestedGoal, recordChanges, sessionSummary, plateauDetected, estimatedMax, bestSet, dayDistance, repeatWorkoutCandidate } from "./metrics.mjs?v=4";
 
 const STORAGE_KEY = "temp-health-v1";
 const TIMER_KEY = "temp-rest-timer-v1";
@@ -157,6 +157,10 @@ function sessionRow(session, removable) {
     exerciseLink.type = "button";
     exerciseLink.addEventListener("click", () => openExercise(exercise.name));
     group.append(exerciseLink);
+    if (exercise.comment) group.append(element("p", "workout-comment", `К упражнению: ${exercise.comment}`));
+    exercise.sets.forEach((set, index) => {
+      if (set.comment) group.append(element("p", "workout-comment", `Подход ${index + 1}: ${set.comment}`));
+    });
     group.append(element("span", "", exercise.sets.map((set, index) => `${index + 1}. ${setText(set, isRun(session))}${set.note ? ` · ${set.note}` : ""}`).join("  ·  ") || "Нет подходов"));
     body.append(group);
   }
@@ -434,6 +438,10 @@ function renderExerciseHistory() {
     const heading = element("div", "exercise-history-head");
     heading.append(element("strong", "", formatDate(entry.date)), element("span", "", entry.volume ? `Объём ${formatNumber(entry.volume)} кг` : entry.activity));
     card.append(heading, element("p", "", entry.sets.map((set, index) => `${index + 1}. ${setText(set, entry.activity === "Бег")}${set.note ? ` · ${set.note}` : ""}`).join("   ·   ")));
+    if (entry.comment) card.append(element("p", "workout-comment", `К упражнению: ${entry.comment}`));
+    entry.sets.forEach((set, index) => {
+      if (set.comment) card.append(element("p", "workout-comment", `Подход ${index + 1}: ${set.comment}`));
+    });
     const changes = recordChanges(entry, previous);
     if (changes.length) card.append(element("small", "record-tags", changes.join(" · ")));
     list.append(card);
@@ -1025,6 +1033,52 @@ function initRecordedWorkout() {
   });
 }
 
+
+function liveCommentControl(exercise, set = null, preview = null) {
+  const control = element("div", "live-comment-control");
+  const button = element("button", "live-comment-button", "Комментарий"); button.type = "button";
+  const panel = element("div", "live-comment-panel"); panel.hidden = true; panel.id = "comment-" + uid();
+  button.setAttribute("aria-expanded", "false"); button.setAttribute("aria-controls", panel.id);
+  const label = element("label", "", "К чему добавить");
+  const scope = element("select"); scope.name = "commentScope";
+  for (const [value, text] of [["set", set ? "К этому подходу" : "К новому подходу"], ["exercise", "К упражнению целиком"]]) {
+    if (set && value === "exercise") continue;
+    const option = element("option", "", text); option.value = value; scope.append(option);
+  }
+  label.append(scope);
+  const textLabel = element("label", "", "Текст комментария");
+  const text = element("textarea"); text.maxLength = 1000; text.rows = 3;
+  text.placeholder = "Например, изменил положение стоп"; textLabel.append(text);
+  const done = element("button", "small-button", "Готово"); done.type = "button";
+  function value() { return scope.value === "exercise" ? exercise.comment || "" : set ? set.comment || "" : exercise.pendingSetComment || ""; }
+  function refresh() {
+    button.classList.toggle("has-comment", Boolean(set ? set.comment : exercise.pendingSetComment || exercise.comment));
+  }
+  function close() { panel.hidden = true; button.setAttribute("aria-expanded", "false"); button.focus(); }
+  button.addEventListener("click", () => {
+    panel.hidden = !panel.hidden; button.setAttribute("aria-expanded", String(!panel.hidden));
+    if (!panel.hidden) { text.value = value(); text.focus(); }
+  });
+  scope.addEventListener("change", () => { text.value = value(); text.focus(); });
+  text.addEventListener("input", () => {
+    const comment = text.value.trim();
+    if (scope.value === "exercise") exercise.comment = comment;
+    else if (set) set.comment = comment;
+    else exercise.pendingSetComment = comment;
+    save(); refresh();
+    if (preview && set) { preview.textContent = comment; preview.hidden = !comment; }
+    const exercisePreview = document.querySelector("#live-exercise-comment");
+    if (exercisePreview) { exercisePreview.textContent = exercise.comment || ""; exercisePreview.hidden = !exercise.comment; }
+  });
+  done.addEventListener("click", close);
+  panel.addEventListener("keydown", event => {
+    if (event.key === "Escape") { event.preventDefault(); close(); }
+  });
+  panel.append(label, textLabel, done);
+  control.append(button, panel); refresh();
+  return control;
+}
+
 function renderLive() {
   const session = liveSession();
   const target = document.querySelector("#live-content");
@@ -1056,6 +1110,9 @@ function renderLive() {
   const remove = element("button", "text-button danger live-remove-exercise", "Убрать упражнение");
   remove.type = "button"; remove.addEventListener("click", () => removeLiveExercise(session, exercise));
   target.append(remove);
+  const exerciseComment = element("p", "workout-comment live-exercise-comment", exercise.comment || "");
+  exerciseComment.id = "live-exercise-comment"; exerciseComment.hidden = !exercise.comment;
+  target.append(exerciseComment);
   const history = exerciseHistory(data.sessions, exercise.name, session.id);
   const previous = history.at(-1);
   const prior = previous ? bestSet(previous.sets) : null;
@@ -1063,7 +1120,13 @@ function renderLive() {
   if (prior) target.append(element("p", "live-previous", `Прошлый раз: ${setText(prior, isRun(session))}`));
   if (goal && prior?.weight > 0 && !isRun(session)) target.append(element("p", "live-goal", `Ориентир сегодня: ${goalLabel(goal)}. Можно изменить.`));
   const completed = element("div", "live-completed");
-  exercise.sets.forEach((set, index) => completed.append(element("div", "live-set-done", `${index + 1}. ${setText(set, isRun(session))}${set.note ? ` · ${set.note}` : ""}`)));
+  exercise.sets.forEach((set, index) => {
+    const row = element("div", "live-set-done");
+    row.append(element("div", "", `${index + 1}. ${setText(set, isRun(session))}${set.note ? ` · ${set.note}` : ""}`));
+    const preview = element("p", "workout-comment live-set-comment", set.comment || ""); preview.hidden = !set.comment;
+    row.append(preview, liveCommentControl(exercise, set, preview));
+    completed.append(row);
+  });
   target.append(completed);
   const rest = element("div", "live-rest"); rest.id = "live-rest";
   rest.innerHTML = '<div class="eyebrow">МЕЖДУ ПОДХОДАМИ</div><h4>Отдых</h4><div class="live-rest-time" data-rest-time role="timer">01:30</div><div class="live-rest-actions"><button type="button" data-rest-pause>Пауза</button><button type="button" data-rest-skip>Пропустить</button><button type="button" data-rest-add>+30 секунд</button></div>';
@@ -1083,12 +1146,14 @@ function renderLive() {
   const repsLabel = element("label", "", isRun(session) ? "Минуты" : "Повторения");
   const reps = element("input"); reps.type = "number"; reps.name = "reps"; reps.min = "1"; reps.max = "10000"; reps.required = true; reps.value = prefill?.reps || ""; repsLabel.append(reps); fields.append(repsLabel);
   form.append(fields);
+  const feedback = element("div", "live-feedback-row");
   if (!isRun(session)) {
     const effort = element("label", "live-effort", "Как ощущался подход?");
     const select = element("select"); select.name = "note";
     for (const note of ["", "легко", "нормально", "тяжело", "до отказа"]) { const option = element("option", "", note || "Не отмечать"); option.value = note; select.append(option); }
-    effort.append(select); form.append(effort);
+    effort.append(select); feedback.append(effort);
   }
+  feedback.append(liveCommentControl(exercise)); form.append(feedback);
   const restChoice = element("label", "live-rest-choice", "Отдых после подхода");
   const select = element("select"); select.name = "restSeconds";
   for (const [seconds, textValue] of [[60, "1 мин"], [90, "1,5 мин"], [120, "2 мин"], [180, "3 мин"]]) { const option = element("option", "", textValue); option.value = seconds; select.append(option); }
@@ -1099,7 +1164,8 @@ function renderLive() {
   form.addEventListener("submit", event => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(form));
-    exercise.sets.push({ id: uid(), weight: isRun(session) ? 0 : number(values.weight), reps: number(values.reps), note: values.note || "", createdAt: Date.now() });
+    exercise.sets.push({ id: uid(), weight: isRun(session) ? 0 : number(values.weight), reps: number(values.reps), note: values.note || "", comment: exercise.pendingSetComment || "", createdAt: Date.now() });
+    delete exercise.pendingSetComment;
     save(); render(); startLiveRest(session);
   });
   target.append(form);
