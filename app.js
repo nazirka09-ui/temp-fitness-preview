@@ -1099,6 +1099,40 @@ function initTheme() {
     try { localStorage.setItem("temp-theme-v1", button.dataset.themeChoice); } catch {}
   }));
 }
+
+function initKnowledgeLibrary() {
+  const tabs = [...document.querySelectorAll(".knowledge-tabs [role=tab]")];
+  function selectTab(tab) {
+    tabs.forEach(button => {
+      const selected = button === tab;
+      button.setAttribute("aria-selected", String(selected));
+      button.tabIndex = selected ? 0 : -1;
+      document.getElementById(button.getAttribute("aria-controls")).hidden = !selected;
+    });
+  }
+  tabs.forEach((tab, index) => {
+    tab.addEventListener("click", () => selectTab(tab));
+    tab.addEventListener("keydown", event => {
+      let next;
+      if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+      else if (event.key === "ArrowLeft") next = (index + tabs.length - 1) % tabs.length;
+      else if (event.key === "Home") next = 0;
+      else if (event.key === "End") next = tabs.length - 1;
+      else return;
+      event.preventDefault(); selectTab(tabs[next]); tabs[next].focus();
+    });
+  });
+  const filters = document.querySelectorAll("[data-muscle]");
+  filters.forEach(button => button.addEventListener("click", () => {
+    filters.forEach(filter => {
+      const selected = filter === button;
+      filter.setAttribute("aria-pressed", String(selected));
+      document.getElementById(filter.getAttribute("aria-controls")).hidden = !selected;
+    });
+  }));
+}
+
+initKnowledgeLibrary();
 initTheme();
 document.querySelector("#today-label").textContent = new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
 document.querySelector("#workout-date").value = today();
