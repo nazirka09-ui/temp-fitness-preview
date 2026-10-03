@@ -155,15 +155,88 @@ function sessionRow(session, removable) {
   if (removable) {
     const button = element("button", "text-button danger", "Удалить тренировку");
     button.type = "button";
-    button.addEventListener("click", () => {
-      if (!confirm(`Удалить тренировку «${session.title}»?`)) return;
-      data.sessions = data.sessions.filter(item => item.id !== session.id);
-      save(); render();
-    });
+    button.addEventListener("click", () => deleteWorkout(session));
     body.append(button);
   }
   details.append(body);
-  return details;
+  return removable ? swipeWorkoutRow(details, session) : details;
+}
+
+function deleteWorkout(session) {
+  if (!confirm(`Удалить тренировку «${session.title}» со всеми подходами?`)) return;
+  if (session.status === "active") {
+    clearLiveRest();
+    timerEnd = 0; localStorage.removeItem(TIMER_KEY);
+    document.querySelector("#live-confirm").hidden = true;
+  }
+  if (resultSessionId === session.id) resultSessionId = null;
+  if (finishedSessionId === session.id) finishedSessionId = null;
+  data.sessions = data.sessions.filter(item => item.id !== session.id);
+  save(); render();
+}
+function swipeWorkoutRow(details, session) {
+  const row = element("div", "workout-swipe-row");
+  const remove = element("button", "workout-swipe-delete", "Удалить");
+  remove.type = "button";
+  remove.setAttribute("aria-label", `Удалить тренировку «${session.title}»`);
+  remove.disabled = true; remove.tabIndex = -1;
+  remove.addEventListener("click", () => deleteWorkout(session));
+  row.append(remove, details);
+  const width = 96;
+  let opened = false, pointer = null, startX = 0, startY = 0, startOffset = 0;
+  let offset = 0, horizontal = false, suppressClick = false;
+  function position(value, animate = false) {
+    offset = Math.max(-width, Math.min(0, value));
+    details.style.transition = animate ? "" : "none";
+    details.style.transform = `translateX(${offset}px)`;
+  }
+  function reveal(value) {
+    opened = value;
+    row.classList.toggle("swipe-open", value);
+    position(value ? -width : 0, true);
+    remove.disabled = !value; remove.tabIndex = value ? 0 : -1;
+  }
+  row.addEventListener("close-workout-swipe", () => reveal(false));
+  details.addEventListener("pointerdown", event => {
+    if (event.pointerType === "mouse" || !event.isPrimary || event.button !== 0) return;
+    pointer = event.pointerId; startX = event.clientX; startY = event.clientY;
+    startOffset = opened ? -width : 0; horizontal = false; suppressClick = false;
+  });
+  details.addEventListener("pointermove", event => {
+    if (event.pointerId !== pointer) return;
+    const dx = event.clientX - startX, dy = event.clientY - startY;
+    if (!horizontal) {
+      if (Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx)) { pointer = null; return; }
+      if (Math.abs(dx) < 10) return;
+      horizontal = true;
+      details.setPointerCapture(event.pointerId);
+    }
+    if (event.cancelable) event.preventDefault();
+    suppressClick = true;
+    position(startOffset + dx);
+  });
+  details.addEventListener("pointerup", event => {
+    if (event.pointerId !== pointer) return;
+    pointer = null;
+    if (!horizontal) return;
+    const show = offset < -width * 0.4;
+    if (show) document.querySelectorAll(".workout-swipe-row").forEach(other => {
+      if (other !== row) other.dispatchEvent(new Event("close-workout-swipe"));
+    });
+    reveal(show);
+  });
+  details.addEventListener("pointercancel", () => { pointer = null; reveal(opened); });
+  details.addEventListener("click", event => {
+    if (suppressClick || opened) {
+      event.preventDefault(); event.stopPropagation();
+      if (!suppressClick) reveal(false);
+      suppressClick = false;
+    }
+  }, true);
+  row.addEventListener("keydown", event => {
+    if (event.key === "Escape") { reveal(false); details.querySelector("summary").focus(); }
+  });
+  return row;
 }
 
 function previousSet(name, currentSession) {
