@@ -1040,13 +1040,13 @@ function initRecordedWorkout() {
   form.addEventListener("submit", event => {
     event.preventDefault();
     const cards = [...document.querySelectorAll(".record-exercise")];
-    if (!cards.length) { addRecordedExercise().querySelector('[name="exerciseChoice"]').focus(); return; }
+    const kind = workoutEdit?.kind || "session";
+    if (!cards.length && kind !== "plan") { addRecordedExercise().querySelector('[name="exerciseChoice"]').focus(); return; }
     form.elements.title.setCustomValidity(form.elements.title.value.trim() ? "" : "Укажи название тренировки.");
     if (!form.reportValidity()) return;
     const running = form.elements.activity.value === "Бег";
     const createdAt = Date.now();
     const original = workoutEdit?.original;
-    const kind = workoutEdit?.kind || "session";
     const exercises = cards.map(card => ({
       ...card.sourceExercise,
       id: card.sourceExercise?.id || uid(), name: card.querySelector('[name="exerciseName"]').value.trim(),
@@ -1397,13 +1397,13 @@ function openWorkoutEditor(kind = "session", original = null, date = today(), re
   form.elements.duration.parentElement.hidden = original?.status === "active";
   document.querySelector("#workout-record .flow-title").textContent = original ? "Изменить тренировку" : kind === "plan" ? "Запланировать тренировку" : "Записать тренировку";
   document.querySelector("#workout-record .flow-subtitle").textContent = kind === "plan"
-    ? "Выбери дату и упражнения. Веса и повторения можно указать как ориентиры — в статистику они попадут после занятия."
+    ? "Достаточно названия и даты. Упражнения, веса и подходы можно добавить позже."
     : "Измени дату, название, упражнения и подходы. Результаты в истории и статистике обновятся.";
   document.querySelector(".record-save").textContent = original ? "Сохранить изменения" : kind === "plan" ? "Сохранить план" : "Сохранить тренировку";
   document.querySelector(".record-back").href = returnTo || (kind === "plan" ? "#calendar" : "#overview");
   document.querySelector("#record-exercises").replaceChildren();
   if (original?.exercises.length) original.exercises.forEach(exercise => addRecordedExercise(exercise));
-  else addRecordedExercise();
+  else if (kind !== "plan") addRecordedExercise();
   updateRecordedFields();
   location.hash = "#workout-record";
 }
@@ -1454,7 +1454,7 @@ function renderCalendar() {
   dailyPlans.forEach(plan => {
     const card = element("article", "calendar-plan");
     card.append(element("small", "", "ЗАПЛАНИРОВАНО"), element("h4", "", plan.title));
-    card.append(element("p", "", plan.exercises.map(exercise => exercise.name).join(" · ")));
+    card.append(element("p", "", plan.exercises.map(exercise => exercise.name).join(" · ") || "Упражнения можно добавить позже"));
     const actions = element("div", "calendar-plan-actions");
     const edit = element("button", "small-button", "Изменить"); edit.type = "button";
     edit.addEventListener("click", () => openWorkoutEditor("plan", plan, plan.date, "#calendar"));
