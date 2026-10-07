@@ -17,6 +17,19 @@ const LIBRARY_GROUPS = { legs: "Ноги", glutes: "Ягодицы", back: "Сп
 const EXERCISE_LIBRARY = Object.entries(LIBRARY_GROUPS).flatMap(([id, group]) =>
   [...document.querySelectorAll("#muscle-" + id + " .exercise-guide h4")].map(node => ({ name: node.textContent.trim(), group }))
 );
+const CUSTOM_EXERCISES_KEY = "temp-custom-exercises-v1";
+const customExercises = (() => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CUSTOM_EXERCISES_KEY) || "[]");
+    const seen = new Set(EXERCISE_LIBRARY.map(entry => exerciseKey(entry.name)));
+    return (Array.isArray(saved) ? saved : []).filter(entry => {
+      if (!entry || typeof entry.name !== "string" || !entry.name.trim() || !Object.values(LIBRARY_GROUPS).includes(entry.group)) return false;
+      const key = exerciseKey(entry.name); if (seen.has(key)) return false;
+      seen.add(key); return true;
+    }).map(entry => ({ ...entry, name: entry.name.trim().slice(0, 80), description: String(entry.description || "").slice(0, 2000) }));
+  } catch { return []; }
+})();
+EXERCISE_LIBRARY.push(...customExercises);
 const CATALOG = [...new Set([...EXERCISE_LIBRARY.map(exercise => exercise.name), ...TEMPLATES.flatMap(template => template.exercises), "Приседания со штангой", "Выпады с гантелями", "Подъёмы на носки", "Молотковые сгибания", "Французский жим", "Становая тяга"])];
 const FLOW_GROUPS = ["Грудь", "Спина", "Ноги", "Ягодицы", "Плечи", "Руки", "Кор", "Всё тело", "Своя тренировка"];
 const FLOW_DEFAULTS = {
@@ -731,6 +744,11 @@ function exercisePicker(selectedGroup, current = null, nameField = "name", exclu
     if (select.value === "__custom") name.value = initial || "";
   }
   group.addEventListener("change", () => options());
+  select.addEventListener("focus", () => {
+    const selected = select.value, customName = name.value;
+    options(selected === "__custom" ? customName || null : selected || null);
+    if (selected === "__custom") { select.value = "__custom"; sync(); name.value = customName; }
+  });
   select.addEventListener("change", () => { name.value = ""; sync(); if (select.value === "__custom") name.focus(); });
   name.addEventListener("input", () => name.setCustomValidity(name.value.trim() ? "" : "Укажи название упражнения."));
   nameLabel.append(select, name);
@@ -1356,6 +1374,87 @@ function initTheme() {
   }));
 }
 
+
+function customExerciseCard(entry) {
+  const card = element("details", "exercise-guide custom-exercise-guide");
+  const heading = element("summary");
+  const title = element("div");
+  title.append(element("h4", "", entry.name), element("p", "", "Моё упражнение"));
+  const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  icon.setAttribute("viewBox", "0 0 24 24"); icon.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "m6 9 6 6 6-6"); icon.append(path); heading.append(title, icon);
+  const body = element("div", "exercise-guide-body");
+  body.append(element("h5", "", "Как выполнять"), element("p", "custom-exercise-description", entry.description || "Описание пока не добавлено."));
+  card.append(heading, body); return card;
+}
+function updateLibraryCounts() {
+  for (const [id, group] of Object.entries(LIBRARY_GROUPS)) {
+    const count = EXERCISE_LIBRARY.filter(entry => entry.group === group).length;
+    document.querySelector('[data-muscle="' + id + '"] span').textContent = count;
+    document.querySelector("#muscle-" + id + " .section-heading p").textContent = count + " упражнений";
+  }
+}
+function initCustomExercises() {
+  for (const entry of customExercises) {
+    const id = Object.keys(LIBRARY_GROUPS).find(key => LIBRARY_GROUPS[key] === entry.group);
+    document.querySelector("#muscle-" + id + " .exercise-library-list").append(customExerciseCard(entry));
+  }
+  updateLibraryCounts();
+  const section = element("div", "library-add");
+  const toggle = element("button", "button button-dark library-add-toggle", "Добавить упражнение");
+  toggle.type = "button"; toggle.setAttribute("aria-expanded", "false"); toggle.setAttribute("aria-controls", "library-add-form");
+  const form = element("form", "panel library-add-form"); form.id = "library-add-form"; form.hidden = true;
+  form.append(element("h3", "", "Своё упражнение"));
+  const nameLabel = element("label", "", "Название упражнения");
+  const name = element("input"); name.name = "name"; name.required = true; name.maxLength = 80; name.placeholder = "Например, тяга в любимом тренажёре"; nameLabel.append(name);
+  const groupLabel = element("label", "", "Группа мышц");
+  const group = element("select"); group.name = "group";
+  for (const [id, value] of Object.entries(LIBRARY_GROUPS)) {
+    const option = element("option", "", value === "Кор" ? "Пресс и корпус" : value); option.value = value; group.append(option);
+  }
+  groupLabel.append(group);
+  const textLabel = element("label", "", "Как выполнять — необязательно");
+  const description = element("textarea"); description.name = "description"; description.rows = 4; description.maxLength = 2000;
+  description.placeholder = "Исходное положение, движение и детали техники"; textLabel.append(description);
+  const actions = element("div", "library-add-actions");
+  const submit = element("button", "small-button", "Сохранить упражнение"); submit.type = "submit";
+  const cancel = element("button", "text-button", "Отмена"); cancel.type = "button"; actions.append(submit, cancel);
+  const status = element("p", "form-help library-add-status"); status.setAttribute("role", "status");
+  function close() { form.hidden = true; toggle.setAttribute("aria-expanded", "false"); toggle.focus(); }
+  toggle.addEventListener("click", () => {
+    form.hidden = !form.hidden; toggle.setAttribute("aria-expanded", String(!form.hidden));
+    if (!form.hidden) {
+      const selected = document.querySelector('[data-muscle][aria-pressed="true"]');
+      group.value = LIBRARY_GROUPS[selected?.dataset.muscle] || "Ноги";
+      name.focus();
+    }
+  });
+  cancel.addEventListener("click", close);
+  name.addEventListener("input", () => name.setCustomValidity(""));
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    const value = name.value.trim();
+    if (!value || EXERCISE_LIBRARY.some(entry => exerciseKey(entry.name) === exerciseKey(value))) {
+      name.setCustomValidity(value ? "Упражнение с таким названием уже есть." : "Укажи название упражнения.");
+      name.reportValidity(); return;
+    }
+    const entry = { id: uid(), name: value, group: group.value, description: description.value.trim() };
+    const updated = [...customExercises, entry];
+    localStorage.setItem(CUSTOM_EXERCISES_KEY, JSON.stringify(updated));
+    customExercises.push(entry); EXERCISE_LIBRARY.push(entry); CATALOG.push(entry.name);
+    GROUP_BY_EXERCISE.set(exerciseKey(entry.name), entry.group);
+    const id = Object.keys(LIBRARY_GROUPS).find(key => LIBRARY_GROUPS[key] === entry.group);
+    document.querySelector("#muscle-" + id + " .exercise-library-list").append(customExerciseCard(entry));
+    updateLibraryCounts();
+    document.querySelector('[data-muscle="' + id + '"]').click();
+    form.reset(); close(); status.textContent = "Упражнение сохранено и доступно при выборе тренировки.";
+  });
+  form.append(nameLabel, groupLabel, textLabel, actions);
+  section.append(toggle, form, status);
+  document.querySelector("#knowledge-exercises").insertBefore(section, document.querySelector(".library-note"));
+}
+
 function initKnowledgeLibrary() {
   const tabs = [...document.querySelectorAll(".knowledge-tabs [role=tab]")];
   function selectTab(tab) {
@@ -1389,6 +1488,7 @@ function initKnowledgeLibrary() {
 }
 
 initKnowledgeLibrary();
+initCustomExercises();
 initTheme();
 document.querySelector("#today-label").textContent = new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
 document.querySelector("#workout-date").value = today();
