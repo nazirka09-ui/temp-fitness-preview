@@ -711,7 +711,7 @@ function chooseFlowGroup(group) {
   flowDraft.title = group;
   flowDraft.activity = previous?.activity || "Силовая";
   flowDraft.replacingIndex = null;
-  flowDraft.exercises = previous ? previous.exercises.map(exercise => ({ name: exercise.name, group: exercise.group || inferGroup(exercise.name), plannedSets: exercise.sets.length || exercise.plannedSets || 3 })) : (FLOW_DEFAULTS[group] || []).map(name => ({ name, group: inferGroup(name) === "Другое" ? group : inferGroup(name), plannedSets: 3 }));
+  flowDraft.exercises = previous ? previous.exercises.map(exercise => ({ name: exercise.name, group: exercise.group || inferGroup(exercise.name), plannedSets: exercise.sets.length || exercise.plannedSets || 3, plannedTargets: workoutTargets(exercise) })) : (FLOW_DEFAULTS[group] || []).map(name => ({ name, group: inferGroup(name) === "Другое" ? group : inferGroup(name), plannedSets: 3 }));
 }
 function createExerciseDatalist() {
   const list = element("datalist"); list.id = "flow-exercise-options";
@@ -780,10 +780,74 @@ function exerciseEditorForm(current = null, onSave) {
     if (!value || flowDraft.exercises.some((exercise, index) => exerciseKey(exercise.name) === exerciseKey(value) && index !== flowDraft.replacingIndex)) {
       picker.name.setCustomValidity("Это упражнение уже есть в тренировке."); picker.name.hidden = false; picker.name.reportValidity(); return;
     }
-    onSave({ name: value, group: picker.group.value, plannedSets: current?.plannedSets || 3 });
+    onSave({ name: value, group: picker.group.value, plannedSets: current?.plannedSets || 3, plannedTargets: current?.plannedTargets });
     renderFlow();
   });
   return form;
+}
+function workoutTargets(exercise) {
+  return (exercise.sets?.length ? exercise.sets : exercise.plannedTargets || []).map(set => ({ weight: set.weight ?? "", reps: set.reps || "" }));
+}
+function compactSetEditor(getSets, replaceSets, running = false) {
+  const box = element("div", "compact-set-editor");
+  const quick = element("div", "compact-set-fields");
+  const inputs = {};
+  for (const [key, caption] of [["count", running ? "Отрезки" : "Подходы"], ["weight", "Вес, кг"], ["reps", running ? "Минуты" : "Повторы"]]) {
+    const label = element("label", "", caption);
+    const input = element("input"); input.type = "number"; input.className = `quick-${key}`;
+    input.min = key === "weight" ? "0" : "1"; input.max = key === "count" ? "100" : key === "weight" ? "1000" : "10000";
+    input.step = key === "weight" || running && key === "reps" ? "any" : "1";
+    if (key === "weight") configureWeightInput(input);
+    input.placeholder = key === "count" ? "3" : "—";
+    label.append(input); quick.append(label); inputs[key] = input;
+    if (running && key === "weight") label.hidden = true;
+    input.addEventListener("input", () => {
+      if (key === "count" && !input.value || !input.checkValidity()) return;
+      let sets = getSets();
+      if (key === "count") {
+        const count = Number(input.value);
+        sets = Array.from({ length: count }, (_, i) => sets[i] || { ...sets.at(-1), id: undefined, comment: "", note: "" });
+      } else sets = sets.map(set => ({ ...set, [key]: input.value }));
+      replaceSets(sets); sync(key);
+    });
+  }
+  const detail = element("details", "compact-set-details");
+  detail.append(element("summary", "", "По подходам"));
+  function sync(skip = null) {
+    const sets = getSets();
+    if (skip !== "count") inputs.count.value = sets.length;
+    for (const key of ["weight", "reps"]) if (skip !== key) {
+      const same = sets.every(set => String(set[key] ?? "") === String(sets[0]?.[key] ?? ""));
+      inputs[key].value = same ? sets[0]?.[key] ?? "" : "";
+      inputs[key].placeholder = same ? "—" : "Разные";
+    }
+    detail.querySelector("summary").textContent = running ? "По отрезкам" : "По подходам";
+  }
+  box.addEventListener("invalid", () => { detail.open = true; }, true);
+  box.append(quick, detail); box.sync = sync; box.inputs = inputs; sync();
+  return box;
+}
+function flowSetEditor(exercise) {
+  if (!exercise.plannedTargets?.length) exercise.plannedTargets = Array.from({ length: exercise.plannedSets || 3 }, () => ({ weight: "", reps: "" }));
+  let editor;
+  const draw = () => {
+    const body = editor.querySelector(".compact-set-details");
+    body.querySelectorAll(".compact-target-row").forEach(row => row.remove());
+    exercise.plannedTargets.forEach((set, index) => {
+      const row = element("div", "compact-target-row"); row.append(element("span", "", `${index + 1}`));
+      for (const key of flowDraft.activity === "Бег" ? ["reps"] : ["weight", "reps"]) {
+        const input = element("input"); input.type = "number"; input.className = `target-${key}`;
+        input.setAttribute("aria-label", `${key === "weight" ? "Вес" : "Повторения"}, подход ${index + 1}`);
+        input.min = key === "weight" ? "0" : "1"; input.max = key === "weight" ? "1000" : "10000"; input.step = key === "weight" ? "any" : "1";
+        if (key === "weight") configureWeightInput(input);
+        input.value = set[key]; input.placeholder = key === "weight" ? "кг" : "повт.";
+        input.addEventListener("input", () => { set[key] = input.value; editor.sync(); }); row.append(input);
+      }
+      body.append(row);
+    });
+  };
+  editor = compactSetEditor(() => exercise.plannedTargets, sets => { exercise.plannedTargets = sets; exercise.plannedSets = sets.length; draw(); }, flowDraft.activity === "Бег");
+  draw(); return editor;
 }
 function renderFlow() {
   const target = document.querySelector("#flow-content");
@@ -830,13 +894,16 @@ function renderFlow() {
       const textBox = element("div", "flow-exercise-text");
       textBox.append(element("strong", "", exercise.name));
       const previous = previousResult(exercise.name);
-      textBox.append(element("span", "", previous ? `Прошлый результат: ${setText(previous, flowDraft.activity === "Бег")}` : "Первое занятие · 3 подхода"));
+      textBox.append(element("span", "", previous ? `Прошлый результат: ${setText(previous, flowDraft.activity === "Бег")}` : "Первое занятие"));
       const controls = element("div", "flow-exercise-controls");
       const up = element("button", "icon-button", "↑"); up.type = "button"; up.disabled = index === 0; up.setAttribute("aria-label", `Поднять ${exercise.name}`); up.addEventListener("click", () => { [flowDraft.exercises[index - 1], flowDraft.exercises[index]] = [flowDraft.exercises[index], flowDraft.exercises[index - 1]]; renderFlow(); });
       const down = element("button", "icon-button", "↓"); down.type = "button"; down.disabled = index === flowDraft.exercises.length - 1; down.setAttribute("aria-label", `Опустить ${exercise.name}`); down.addEventListener("click", () => { [flowDraft.exercises[index + 1], flowDraft.exercises[index]] = [flowDraft.exercises[index], flowDraft.exercises[index + 1]]; renderFlow(); });
       const replace = element("button", "text-button", "Заменить"); replace.type = "button"; replace.addEventListener("click", () => { flowDraft.replacingIndex = flowDraft.replacingIndex === index ? null : index; renderFlow(); });
       const remove = element("button", "text-button danger", "Удалить"); remove.type = "button"; remove.addEventListener("click", () => { flowDraft.exercises.splice(index, 1); flowDraft.replacingIndex = null; renderFlow(); });
-      controls.append(up, down, replace, remove); card.append(numberTag, textBox, controls);
+      const menu = element("details", "exercise-actions-menu");
+      const menuTitle = element("summary", "", "⋯"); menuTitle.setAttribute("aria-label", `Действия: ${exercise.name}`);
+      controls.append(up, down, replace, remove); menu.append(menuTitle, controls);
+      card.append(numberTag, textBox, menu, flowSetEditor(exercise));
       if (flowDraft.replacingIndex === index) card.append(exerciseEditorForm(exercise, value => { flowDraft.exercises[index] = value; flowDraft.replacingIndex = null; }));
       list.append(card);
     });
@@ -848,7 +915,9 @@ function renderFlow() {
   const plan = element("div", "flow-plan-list");
   for (const exercise of flowDraft.exercises) {
     const card = element("div", "flow-plan-card");
-    card.append(element("strong", "", exercise.name), element("small", "", `${exercise.plannedSets} подхода`));
+    card.append(element("strong", "", exercise.name), element("small", "", `${exercise.plannedSets} подхода · план`));
+    const targets = workoutTargets(exercise);
+    if (targets.some(set => set.weight !== "" || set.reps !== "")) card.append(element("p", "", targets.map((set, i) => `${i + 1}: ${set.weight !== "" ? set.weight + " кг" : "вес не указан"}${set.reps ? " × " + set.reps : ""}`).join(" · ")));
     const previous = previousResult(exercise.name);
     if (previous) card.append(element("p", "", `Прошлый раз: ${setText(previous, flowDraft.activity === "Бег")}`));
     const goal = suggestedGoal(exerciseHistory(data.sessions, exercise.name));
@@ -859,16 +928,16 @@ function renderFlow() {
 }
 function flowNext() {
   if (flowDraft.step === 1 && flowDraft.group) { flowDraft.step = 2; renderFlow(); window.scrollTo(0, 0); }
-  else if (flowDraft.step === 2 && flowDraft.exercises.length && flowDraft.title.trim()) { flowDraft.step = 3; renderFlow(); window.scrollTo(0, 0); }
+  else if (flowDraft.step === 2 && flowDraft.exercises.length && flowDraft.title.trim()) { if ([...document.querySelectorAll("#flow-content input")].some(input => !input.reportValidity())) return; flowDraft.step = 3; renderFlow(); window.scrollTo(0, 0); }
   else if (flowDraft.step === 3) startFlowSession();
 }
 function startFlowSession(source = null) {
   if (activeSession()) { location.hash = "#workout-live"; return; }
   const group = source ? focusGroup(source) : flowDraft.group;
-  const exercises = source ? source.exercises.map(exercise => ({ name: exercise.name, group: exercise.group || inferGroup(exercise.name), plannedSets: exercise.sets.length || exercise.plannedSets || 3 })) : flowDraft.exercises;
+  const exercises = source ? source.exercises.map(exercise => ({ name: exercise.name, group: exercise.group || inferGroup(exercise.name), plannedSets: exercise.sets.length || exercise.plannedSets || 3, plannedTargets: workoutTargets(exercise) })) : flowDraft.exercises;
   if (!exercises.length) return;
   const startedAt = Date.now();
-  const session = { id: uid(), date: today(), title: source ? source.title : flowDraft.title.trim(), activity: source?.activity || flowDraft.activity, focusGroup: group, templateId: source?.templateId || ({ "Грудь": "chest", "Спина": "back", "Ноги": "legs", "Плечи": "shoulders", "Руки": "arms", "Всё тело": "full" })[group] || "", status: "active", createdAt: startedAt, startedAt, exercises: exercises.map(exercise => ({ id: uid(), name: exercise.name, group: exercise.group, plannedSets: exercise.plannedSets || 3, sets: [] })) };
+  const session = { id: uid(), date: today(), title: source ? source.title : flowDraft.title.trim(), activity: source?.activity || flowDraft.activity, focusGroup: group, templateId: source?.templateId || ({ "Грудь": "chest", "Спина": "back", "Ноги": "legs", "Плечи": "shoulders", "Руки": "arms", "Всё тело": "full" })[group] || "", status: "active", createdAt: startedAt, startedAt, exercises: exercises.map(exercise => ({ id: uid(), name: exercise.name, group: exercise.group, plannedSets: exercise.plannedSets || 3, plannedTargets: workoutTargets(exercise), sets: [] })) };
   session.currentExerciseId = session.exercises[0].id;
   data.sessions.push(session);
   clearLiveRest();
@@ -961,8 +1030,8 @@ function addRecordedSet(card, source = null) {
   const label = element("span", "record-set-number");
   const weightLabel = element("label", "", "Вес, кг");
   const weight = element("input"); weight.type = "number"; weight.name = "weight";
-  weight.min = "0"; weight.max = "1000"; weight.step = "0.5"; weight.required = true;
-  configureWeightInput(weight); weight.value = source?.weight ?? 0; weightLabel.append(weight);
+  weight.min = "0"; weight.max = "1000"; weight.step = "0.5"; weight.required = false;
+  configureWeightInput(weight); weight.value = source?.weight ?? ""; weightLabel.append(weight);
   const repsLabel = element("label", "record-reps-label");
   const caption = element("span", "record-reps-caption", "Повторения");
   const reps = element("input"); reps.type = "number"; reps.name = "reps";
@@ -997,6 +1066,13 @@ function updateRecordedFields() {
       row.querySelector(".record-remove-set").disabled = false;
       row.querySelector('[name="reps"]').required = workoutEdit?.kind !== "plan";
     });
+    if (card.setEditor) {
+      card.setEditor.inputs.weight.parentElement.hidden = running;
+      card.setEditor.inputs.count.parentElement.firstChild.textContent = running ? "Отрезки" : "Подходы";
+      card.setEditor.inputs.reps.parentElement.firstChild.textContent = running ? "Минуты" : "Повторы";
+      card.setEditor.inputs.reps.step = running ? "any" : "1";
+      card.setEditor.sync();
+    }
     card.querySelector(".record-add-set").textContent = running ? "Добавить отрезок" : "Добавить подход";
   });
 }
@@ -1020,7 +1096,17 @@ function addRecordedExercise(source = null) {
   card.append(header, details, rows, add);
   document.querySelector("#record-exercises").append(card);
   if (source) source.sets.forEach(set => addRecordedSet(card, set));
-  else addRecordedSet(card);
+  else for (let i = 0; i < 3; i++) addRecordedSet(card);
+  const editor = compactSetEditor(
+    () => [...rows.children].map(row => ({ ...row.sourceSet, weight: row.querySelector('[name="weight"]').value, reps: row.querySelector('[name="reps"]').value, note: row.querySelector('[name="note"]').value })),
+    sets => { rows.replaceChildren(); sets.forEach(set => addRecordedSet(card, set)); },
+    document.querySelector("#record-workout-form").elements.activity.value === "Бег"
+  );
+  editor.querySelector("details").append(rows, add);
+  card.append(editor); card.setEditor = editor;
+  rows.addEventListener("input", () => editor.sync());
+  rows.addEventListener("change", () => editor.sync());
+  card.addEventListener("invalid", () => { editor.querySelector("details").open = true; }, true);
   updateRecordedFields();
   return card;
 }
@@ -1127,7 +1213,7 @@ function liveSetActions(session, exercise, set, row) {
     let weight;
     if (!isRun(session)) {
       const label = element("label", "", "Вес, кг");
-      weight = element("input"); weight.name = "weight"; weight.required = true; weight.value = set.weight;
+      weight = element("input"); weight.name = "weight"; weight.required = false; weight.value = set.weight;
       configureWeightInput(weight); label.append(weight); fields.append(label);
     }
     const label = element("label", "", isRun(session) ? "Минуты" : "Повторения");
@@ -1262,7 +1348,7 @@ function renderLive() {
   form.append(setHeading);
   const fields = element("div", "live-set-fields");
   const targetSet = exercise.plannedTargets?.[exercise.sets.length];
-  const prefill = targetSet?.reps > 0 ? targetSet : exercise.sets.at(-1) || goal || prior;
+  const prefill = targetSet ? { ...(exercise.sets.at(-1) || goal || prior), ...Object.fromEntries(Object.entries(targetSet).filter(([, value]) => value !== "" && value != null)) } : exercise.sets.at(-1) || goal || prior;
   if (!isRun(session)) {
     const weightLabel = element("label", "", "Вес, кг");
     const weight = element("input"); weight.type = "number"; weight.name = "weight"; weight.min = "0"; weight.max = "1000"; weight.step = "0.5"; configureWeightInput(weight); weight.value = prefill?.weight ?? 0; weightLabel.append(weight); fields.append(weightLabel);
