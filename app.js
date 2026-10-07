@@ -46,7 +46,7 @@ const today = () => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 };
-const number = value => Number(value) || 0;
+const number = value => Number(String(value ?? "").trim().replace(",", ".")) || 0;
 const formatNumber = value => new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 }).format(value);
 const formatDate = value => new Date(`${value}T12:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
 const recordWord = count => count % 10 === 1 && count % 100 !== 11 ? "тренировка" : [2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100) ? "тренировки" : "тренировок";
@@ -360,7 +360,7 @@ function exerciseCard(session, exercise) {
     const weight = element("label", "", "Вес, кг");
     const input = element("input");
     input.name = "weight"; input.type = "number"; input.min = "0"; input.max = "1000"; input.step = "0.5"; input.value = last ? last.weight : 0;
-    weight.append(input); form.append(weight);
+    configureWeightInput(input); weight.append(input); form.append(weight);
   }
   const reps = element("label", "", isRun(session) ? "Минуты" : "Повторения");
   const input = element("input");
@@ -930,7 +930,7 @@ function addRecordedSet(card, source = null) {
   const weightLabel = element("label", "", "Вес, кг");
   const weight = element("input"); weight.type = "number"; weight.name = "weight";
   weight.min = "0"; weight.max = "1000"; weight.step = "0.5"; weight.required = true;
-  weight.value = source?.weight ?? 0; weightLabel.append(weight);
+  configureWeightInput(weight); weight.value = source?.weight ?? 0; weightLabel.append(weight);
   const repsLabel = element("label", "record-reps-label");
   const caption = element("span", "record-reps-caption", "Повторения");
   const reps = element("input"); reps.type = "number"; reps.name = "reps";
@@ -1034,6 +1034,72 @@ function initRecordedWorkout() {
 }
 
 
+
+function configureWeightInput(input) {
+  input.type = "text"; input.inputMode = "decimal";
+  input.removeAttribute("min"); input.removeAttribute("max"); input.removeAttribute("step");
+  input.pattern = "[0-9]+([.,][0-9]+)?|[.,][0-9]+";
+  function validate() {
+    const value = input.value.trim();
+    const parsed = Number(value.replace(",", "."));
+    input.setCustomValidity(value && (!/^(?:[0-9]+(?:[.,][0-9]+)?|[.,][0-9]+)$/.test(value) || !Number.isFinite(parsed) || parsed < 0 || parsed > 1000)
+      ? "Введи вес от 0 до 1000 кг. Дробную часть можно указать через точку или запятую." : "");
+  }
+  input.addEventListener("input", validate); validate();
+}
+function liveSetActions(session, exercise, set, row) {
+  const menu = element("details", "live-set-menu");
+  const summary = element("summary", "live-set-menu-toggle");
+  summary.setAttribute("aria-label", "Действия с подходом");
+  summary.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>';
+  const actions = element("div", "live-set-menu-actions");
+  const edit = element("button", "", "Изменить"); edit.type = "button";
+  const remove = element("button", "danger", "Удалить"); remove.type = "button";
+  menu.append(summary, actions); actions.append(edit, remove);
+  menu.addEventListener("toggle", () => {
+    if (menu.open) document.querySelectorAll(".live-set-menu[open]").forEach(other => { if (other !== menu) other.open = false; });
+  });
+  menu.addEventListener("keydown", event => {
+    if (event.key === "Escape") { event.preventDefault(); menu.open = false; summary.focus(); }
+  });
+  edit.addEventListener("click", () => {
+    menu.open = false;
+    if (row.querySelector(".live-set-edit")) { row.querySelector(".live-set-edit input").focus(); return; }
+    const form = element("form", "live-set-edit");
+    const fields = element("div", "live-set-fields");
+    let weight;
+    if (!isRun(session)) {
+      const label = element("label", "", "Вес, кг");
+      weight = element("input"); weight.name = "weight"; weight.required = true; weight.value = set.weight;
+      configureWeightInput(weight); label.append(weight); fields.append(label);
+    }
+    const label = element("label", "", isRun(session) ? "Минуты" : "Повторения");
+    const reps = element("input"); reps.name = "reps"; reps.type = "number";
+    reps.required = true; reps.min = "1"; reps.max = "10000"; reps.step = isRun(session) ? "0.1" : "1";
+    reps.value = set.reps; label.append(reps); fields.append(label);
+    const buttons = element("div", "live-set-edit-actions");
+    const submit = element("button", "small-button", "Сохранить"); submit.type = "submit";
+    const cancel = element("button", "text-button", "Отмена"); cancel.type = "button";
+    cancel.addEventListener("click", () => { form.remove(); summary.focus(); });
+    buttons.append(submit, cancel); form.append(fields, buttons); row.append(form);
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      set.weight = weight ? number(weight.value) : 0; set.reps = number(reps.value);
+      save(); render();
+    });
+    (weight || reps).focus();
+  });
+  remove.addEventListener("click", () => {
+    menu.open = false;
+    if (!confirm("Удалить этот подход?")) return;
+    exercise.sets = exercise.sets.filter(item => item.id !== set.id);
+    if (!exercise.sets.length) exercise.completed = false;
+    save(); render();
+  });
+  return menu;
+}
+
 function liveCommentControl(exercise, set = null, preview = null) {
   const control = element("div", "live-comment-control");
   const button = element("button", "live-comment-button", "Комментарий"); button.type = "button";
@@ -1122,7 +1188,7 @@ function renderLive() {
   const completed = element("div", "live-completed");
   exercise.sets.forEach((set, index) => {
     const row = element("div", "live-set-done");
-    row.append(element("div", "", `${index + 1}. ${setText(set, isRun(session))}${set.note ? ` · ${set.note}` : ""}`));
+    row.append(liveSetActions(session, exercise, set, row), element("div", "live-set-result", `${index + 1}. ${setText(set, isRun(session))}${set.note ? ` · ${set.note}` : ""}`));
     const preview = element("p", "workout-comment live-set-comment", set.comment || ""); preview.hidden = !set.comment;
     row.append(preview, liveCommentControl(exercise, set, preview));
     completed.append(row);
@@ -1141,7 +1207,7 @@ function renderLive() {
   const prefill = exercise.sets.at(-1) || goal || prior;
   if (!isRun(session)) {
     const weightLabel = element("label", "", "Вес, кг");
-    const weight = element("input"); weight.type = "number"; weight.name = "weight"; weight.min = "0"; weight.max = "1000"; weight.step = "0.5"; weight.value = prefill?.weight ?? 0; weightLabel.append(weight); fields.append(weightLabel);
+    const weight = element("input"); weight.type = "number"; weight.name = "weight"; weight.min = "0"; weight.max = "1000"; weight.step = "0.5"; configureWeightInput(weight); weight.value = prefill?.weight ?? 0; weightLabel.append(weight); fields.append(weightLabel);
   }
   const repsLabel = element("label", "", isRun(session) ? "Минуты" : "Повторения");
   const reps = element("input"); reps.type = "number"; reps.name = "reps"; reps.min = "1"; reps.max = "10000"; reps.required = true; reps.value = prefill?.reps || ""; repsLabel.append(reps); fields.append(repsLabel);
