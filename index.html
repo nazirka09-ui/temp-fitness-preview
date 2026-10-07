@@ -42,7 +42,7 @@
 
         <section class="page active" id="overview" aria-labelledby="page-title">
           <div class="hero">
-            <div><span class="hero-kicker">НАЧНИ С СЕГОДНЯ</span><h2>Твой темп.<br /><em>Твой прогресс.</em></h2><p>Записывай тренировки и питание. Смотри, как усилия превращаются в результат.</p><div class="hero-actions"><a class="button button-light" id="hero-start" href="#workout-flow">Начать тренировку </a><a class="button hero-record" id="hero-record" href="#workout-record">Записать тренировку </a></div><button class="hero-secondary" id="hero-new" type="button" hidden>Новая тренировка</button></div>
+            <div><span class="hero-kicker">НАЧНИ С СЕГОДНЯ</span><h2>Твой темп.<br /><em>Твой прогресс.</em></h2><p>Записывай тренировки и питание. Смотри, как усилия превращаются в результат.</p><div class="hero-actions"><a class="button button-light" id="hero-start" href="#workout-flow">Начать тренировку </a><a class="button hero-record" id="hero-record" href="#workout-record">Записать тренировку </a></div><a class="hero-calendar" href="#calendar">Календарь</a><button class="hero-secondary" id="hero-new" type="button" hidden>Новая тренировка</button></div>
             <div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="art-core">↑</div><div class="art-label">ДВИГАЙСЯ<br />ВПЕРЁД</div></div>
           </div>
           <div class="section-heading"><div><div class="eyebrow">ГЛАВНОЕ ЗА СЕГОДНЯ</div><h2>Всё под контролем</h2></div></div>
@@ -77,6 +77,11 @@
         </section>
 
 
+        <section class="page" id="calendar" aria-label="Календарь тренировок">
+          <div class="calendar-head"><div><div class="eyebrow">ТВОЙ ПЛАН</div><h2>Календарь тренировок</h2></div><button type="button" class="calendar-add" id="calendar-add" aria-label="Добавить тренировку">+</button></div>
+          <section class="panel calendar-panel"><div class="calendar-month-bar"><button type="button" id="calendar-prev" aria-label="Предыдущий месяц">‹</button><h3 id="calendar-month"></h3><button type="button" id="calendar-next" aria-label="Следующий месяц">›</button></div><button type="button" class="text-button" id="calendar-today">Сегодня</button><div class="calendar-weekdays" aria-hidden="true"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div><div id="calendar-grid" class="calendar-grid"></div><div class="calendar-legend"><span><i class="calendar-mark done"></i>Завершено</span><span><i class="calendar-mark planned"></i>Запланировано</span></div></section>
+          <section class="panel calendar-day-panel"><div class="panel-head"><h3 id="calendar-day-title"></h3></div><div id="calendar-day-list"></div></section>
+        </section>
         <section class="page" id="workout-record" aria-label="Записать прошедшую тренировку">
           <div class="record-shell">
             <a class="record-back" href="#overview">К обзору</a>

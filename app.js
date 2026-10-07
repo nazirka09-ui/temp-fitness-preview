@@ -87,11 +87,16 @@ function loadData() {
     return {
       sessions: (Array.isArray(saved?.sessions) ? saved.sessions : migrateWorkouts(Array.isArray(saved?.workouts) ? saved.workouts : [])).map(session => ({ ...session, exercises: session.exercises.map(exercise => ({ ...exercise, group: exercise.group || inferGroup(exercise.name) })) })),
       food: Array.isArray(saved?.food) ? saved.food : [],
+      plans: Array.isArray(saved?.plans) ? saved.plans : [],
     };
-  } catch { return { sessions: [], food: [] }; }
+  } catch { return { sessions: [], food: [], plans: [] }; }
 }
 const data = loadData();
 const save = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+let workoutEdit = null;
+let calendarDate = today();
+let calendarMonth = new Date().getMonth();
+let calendarYear = new Date().getFullYear();
 let selectedTemplate = null;
 let restSeconds = Number(localStorage.getItem(REST_DURATION_KEY)) || 120;
 let timerEnd = Number(localStorage.getItem(TIMER_KEY)) || 0;
@@ -177,6 +182,9 @@ function sessionRow(session, removable) {
     group.append(element("span", "", exercise.sets.map((set, index) => `${index + 1}. ${setText(set, isRun(session))}${set.note ? ` · ${set.note}` : ""}`).join("  ·  ") || "Нет подходов"));
     body.append(group);
   }
+  const edit = element("button", "small-button history-edit", "Изменить тренировку");
+  edit.type = "button"; edit.addEventListener("click", () => openWorkoutEditor("session", session, session.date, location.hash));
+  body.append(edit);
   if (removable) {
     const button = element("button", "text-button danger", "Удалить тренировку");
     button.type = "button";
@@ -457,7 +465,12 @@ function renderExerciseHistory() {
     });
     const changes = recordChanges(entry, previous);
     if (changes.length) card.append(element("small", "record-tags", changes.join(" · ")));
-    list.append(card);
+    const edit = element("button", "small-button", "Изменить тренировку"); edit.type = "button";
+    edit.addEventListener("click", () => {
+      const session = data.sessions.find(item => item.id === entry.sessionId);
+      if (session) openWorkoutEditor("session", session, session.date, "#training");
+    });
+    card.append(edit); list.append(card);
   });
   target.append(list);
   const note = element("p", "form-help", "Расчётная сила — приблизительная оценка 1 повторения: вес × (1 + повторения / 30), только для подходов до 12 повторений. Сравнивай одинаковое упражнение и похожее усилие; цифра не заменяет реальное измерение.");
@@ -944,6 +957,7 @@ function removeLiveExercise(session, exercise) {
 function addRecordedSet(card, source = null) {
   const rows = card.querySelector(".record-sets");
   const row = element("div", "record-set-row");
+  row.sourceSet = source?.id ? source : null;
   const label = element("span", "record-set-number");
   const weightLabel = element("label", "", "Вес, кг");
   const weight = element("input"); weight.type = "number"; weight.name = "weight";
@@ -959,6 +973,7 @@ function addRecordedSet(card, source = null) {
   for (const note of ["", "легко", "нормально", "тяжело", "до отказа"]) {
     const option = element("option", "", note || "Не отмечать"); option.value = note; effort.append(option);
   }
+  effort.value = source?.note || "";
   effortLabel.append(effort);
   const remove = element("button", "text-button danger record-remove-set", "Удалить");
   remove.type = "button";
@@ -979,20 +994,22 @@ function updateRecordedFields() {
       row.querySelector(".record-reps-caption").textContent = running ? "Минуты" : "Повторения";
       row.querySelector('[name="reps"]').step = running ? "0.1" : "1";
       row.querySelector(".record-effort").hidden = running;
-      row.querySelector(".record-remove-set").disabled = rows.length === 1;
+      row.querySelector(".record-remove-set").disabled = false;
+      row.querySelector('[name="reps"]').required = workoutEdit?.kind !== "plan";
     });
     card.querySelector(".record-add-set").textContent = running ? "Добавить отрезок" : "Добавить подход";
   });
 }
-function addRecordedExercise() {
+function addRecordedExercise(source = null) {
   const card = element("section", "panel record-exercise");
+  card.sourceExercise = source;
   const header = element("div", "panel-head");
   const heading = element("h3", "record-exercise-heading");
   const remove = element("button", "text-button danger", "Удалить упражнение"); remove.type = "button";
   remove.addEventListener("click", () => { card.remove(); updateRecordedFields(); });
   header.append(heading, remove);
   const details = element("div", "form-row");
-  const picker = exercisePicker("Ноги", null, "exerciseName");
+  const picker = exercisePicker(source?.group || "Ноги", source, "exerciseName");
   details.append(picker.nameLabel, picker.groupLabel);
   const rows = element("div", "record-sets");
   const add = element("button", "small-button record-add-set", "Добавить подход"); add.type = "button";
@@ -1002,7 +1019,9 @@ function addRecordedExercise() {
   });
   card.append(header, details, rows, add);
   document.querySelector("#record-exercises").append(card);
-  addRecordedSet(card);
+  if (source) source.sets.forEach(set => addRecordedSet(card, set));
+  else addRecordedSet(card);
+  updateRecordedFields();
   return card;
 }
 function initRecordedWorkout() {
@@ -1021,33 +1040,53 @@ function initRecordedWorkout() {
   form.addEventListener("submit", event => {
     event.preventDefault();
     const cards = [...document.querySelectorAll(".record-exercise")];
-    if (!cards.length) { addRecordedExercise().querySelector('[name="exerciseName"]').focus(); return; }
+    if (!cards.length) { addRecordedExercise().querySelector('[name="exerciseChoice"]').focus(); return; }
+    form.elements.title.setCustomValidity(form.elements.title.value.trim() ? "" : "Укажи название тренировки.");
     if (!form.reportValidity()) return;
     const running = form.elements.activity.value === "Бег";
     const createdAt = Date.now();
+    const original = workoutEdit?.original;
+    const kind = workoutEdit?.kind || "session";
     const exercises = cards.map(card => ({
-      id: uid(), name: card.querySelector('[name="exerciseName"]').value.trim(),
-      group: card.querySelector('[name="group"]').value, completed: true,
+      ...card.sourceExercise,
+      id: card.sourceExercise?.id || uid(), name: card.querySelector('[name="exerciseName"]').value.trim(),
+      group: card.querySelector('[name="group"]').value,
+      completed: original?.status === "active" ? Boolean(card.sourceExercise?.completed) : kind !== "plan",
       sets: [...card.querySelectorAll(".record-set-row")].map(row => ({
-        id: uid(), weight: running ? 0 : number(row.querySelector('[name="weight"]').value),
+        ...row.sourceSet,
+        id: row.sourceSet?.id || uid(), weight: running ? 0 : number(row.querySelector('[name="weight"]').value),
         reps: number(row.querySelector('[name="reps"]').value),
-        note: running ? "" : row.querySelector('[name="note"]').value, createdAt,
+        note: running ? "" : row.querySelector('[name="note"]').value, createdAt: row.sourceSet?.createdAt || createdAt,
       })),
     }));
     const session = {
-      id: uid(), title: form.elements.title.value.trim(), date: form.elements.date.value,
-      activity: form.elements.activity.value, status: "done", createdAt, exercises,
+      ...original, id: original?.id || uid(), title: form.elements.title.value.trim(), date: form.elements.date.value,
+      activity: form.elements.activity.value, status: kind === "plan" ? "planned" : original?.status || "done",
+      createdAt: original?.createdAt || createdAt, exercises,
     };
+    session.focusGroup = focusGroup({ exercises, title: session.title });
     const duration = number(form.elements.duration.value);
-    if (duration) {
-      session.startedAt = new Date(`${session.date}T00:00:00`).getTime();
-      session.completedAt = session.startedAt + duration * 60000;
+    if (session.status !== "active") {
+      if (duration) {
+        session.startedAt = new Date(`${session.date}T00:00:00`).getTime();
+        session.completedAt = session.startedAt + duration * 60000;
+      } else { delete session.startedAt; delete session.completedAt; }
     }
-    data.sessions.push(session); save();
-    resultSessionId = session.id;
+    if (session.status === "active" && !exercises.some(entry => entry.id === session.currentExerciseId)) {
+      session.currentExerciseId = exercises[0]?.id; if (liveRest) skipLiveRest();
+    }
+    const collection = kind === "plan" ? data.plans : data.sessions;
+    const index = collection.findIndex(entry => entry.id === session.id);
+    if (index >= 0) collection[index] = session; else collection.push(session);
+    save();
+    calendarDate = session.date; const date = new Date(session.date + "T12:00:00");
+    calendarMonth = date.getMonth(); calendarYear = date.getFullYear();
+    const destination = workoutEdit?.returnTo || (kind === "plan" ? "#calendar" : "#workout-result");
+    if (kind !== "plan") resultSessionId = session.id;
+    workoutEdit = null;
     form.reset(); form.elements.date.value = today();
     document.querySelector("#record-exercises").replaceChildren(); addRecordedExercise();
-    render(); location.hash = "#workout-result";
+    render(); location.hash = destination;
   });
 }
 
@@ -1222,7 +1261,8 @@ function renderLive() {
   const setHeading = element("h4", "", `Подход ${exercise.sets.length + 1}`);
   form.append(setHeading);
   const fields = element("div", "live-set-fields");
-  const prefill = exercise.sets.at(-1) || goal || prior;
+  const targetSet = exercise.plannedTargets?.[exercise.sets.length];
+  const prefill = targetSet?.reps > 0 ? targetSet : exercise.sets.at(-1) || goal || prior;
   if (!isRun(session)) {
     const weightLabel = element("label", "", "Вес, кг");
     const weight = element("input"); weight.type = "number"; weight.name = "weight"; weight.min = "0"; weight.max = "1000"; weight.step = "0.5"; configureWeightInput(weight); weight.value = prefill?.weight ?? 0; weightLabel.append(weight); fields.append(weightLabel);
@@ -1342,19 +1382,116 @@ function startTimer(seconds) {
   localStorage.setItem(TIMER_KEY, String(timerEnd));
   renderTimer();
 }
-function render() { renderTemplates(); renderWorkouts(); renderFood(); renderTimer(); renderHero(); renderFlow(); renderLive(); renderResult(); }
+function render() { renderTemplates(); renderWorkouts(); renderFood(); renderTimer(); renderHero(); renderFlow(); renderLive(); renderResult(); renderCalendar(); }
+
+function openWorkoutEditor(kind = "session", original = null, date = today(), returnTo = null) {
+  workoutEdit = { kind, original: original ? structuredClone(original) : null, returnTo };
+  const form = document.querySelector("#record-workout-form");
+  form.reset(); form.elements.title.setCustomValidity("");
+  form.elements.date.removeAttribute("max");
+  if (kind !== "plan" && original?.status !== "active") form.elements.date.max = today();
+  form.elements.title.value = original?.title || "";
+  form.elements.date.value = original?.date || date;
+  form.elements.activity.value = original?.activity || "Силовая";
+  form.elements.duration.value = original?.completedAt && original?.startedAt ? Math.max(1, Math.round((original.completedAt - original.startedAt) / 60000)) : "";
+  form.elements.duration.parentElement.hidden = original?.status === "active";
+  document.querySelector("#workout-record .flow-title").textContent = original ? "Изменить тренировку" : kind === "plan" ? "Запланировать тренировку" : "Записать тренировку";
+  document.querySelector("#workout-record .flow-subtitle").textContent = kind === "plan"
+    ? "Выбери дату и упражнения. Веса и повторения можно указать как ориентиры — в статистику они попадут после занятия."
+    : "Измени дату, название, упражнения и подходы. Результаты в истории и статистике обновятся.";
+  document.querySelector(".record-save").textContent = original ? "Сохранить изменения" : kind === "plan" ? "Сохранить план" : "Сохранить тренировку";
+  document.querySelector(".record-back").href = returnTo || (kind === "plan" ? "#calendar" : "#overview");
+  document.querySelector("#record-exercises").replaceChildren();
+  if (original?.exercises.length) original.exercises.forEach(exercise => addRecordedExercise(exercise));
+  else addRecordedExercise();
+  updateRecordedFields();
+  location.hash = "#workout-record";
+}
+function availablePlans() { return data.plans.filter(plan => !data.sessions.some(session => session.planId === plan.id)); }
+function startCalendarPlan(plan) {
+  if (activeSession()) { location.hash = "#workout-live"; return; }
+  const startedAt = Date.now();
+  const session = {
+    id: uid(), planId: plan.id, title: plan.title, date: today(), activity: plan.activity,
+    focusGroup: focusGroup(plan), status: "active", createdAt: startedAt, startedAt,
+    exercises: plan.exercises.map(exercise => ({
+      id: uid(), name: exercise.name, group: exercise.group, comment: exercise.comment || "",
+      plannedSets: exercise.sets.length || 3, plannedTargets: exercise.sets.map(set => ({ weight: set.weight, reps: set.reps })), sets: [],
+    })),
+  };
+  session.currentExerciseId = session.exercises[0]?.id;
+  data.sessions.push(session); data.plans = data.plans.filter(entry => entry.id !== plan.id);
+  save(); render(); location.hash = "#workout-live";
+}
+function renderCalendar() {
+  const grid = document.querySelector("#calendar-grid"); if (!grid) return;
+  const month = new Date(calendarYear, calendarMonth, 1);
+  document.querySelector("#calendar-month").textContent = month.toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
+  grid.replaceChildren();
+  const offset = (month.getDay() + 6) % 7;
+  for (let index = 0; index < offset; index++) grid.append(element("span", "calendar-blank"));
+  const days = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+  const plans = availablePlans();
+  for (let day = 1; day <= days; day++) {
+    const date = `${calendarYear}-${String(calendarMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const done = data.sessions.some(session => session.date === date && session.status !== "active");
+    const planned = plans.some(plan => plan.date === date);
+    const button = element("button", "calendar-date" + (done ? " has-workout" : "") + (planned ? " has-plan" : "") + (date === calendarDate ? " selected" : "") + (date === today() ? " is-today" : ""), String(day));
+    button.type = "button"; button.dataset.date = date;
+    button.setAttribute("aria-label", new Date(date + "T12:00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" }) + (done ? ", тренировка завершена" : "") + (planned ? ", есть план" : ""));
+    button.setAttribute("aria-pressed", String(date === calendarDate));
+    button.addEventListener("click", () => { calendarDate = date; renderCalendar(); });
+    grid.append(button);
+  }
+  document.querySelector("#calendar-day-title").textContent = new Date(calendarDate + "T12:00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+  const list = document.querySelector("#calendar-day-list"); list.replaceChildren();
+  const sessions = data.sessions.filter(session => session.date === calendarDate);
+  const dailyPlans = plans.filter(plan => plan.date === calendarDate);
+  sessions.forEach(session => {
+    list.append(sessionRow(session, true));
+    if (session.status === "active") { const resume = element("a", "small-button", "Продолжить тренировку"); resume.href = "#workout-live"; list.append(resume); }
+  });
+  dailyPlans.forEach(plan => {
+    const card = element("article", "calendar-plan");
+    card.append(element("small", "", "ЗАПЛАНИРОВАНО"), element("h4", "", plan.title));
+    card.append(element("p", "", plan.exercises.map(exercise => exercise.name).join(" · ")));
+    const actions = element("div", "calendar-plan-actions");
+    const edit = element("button", "small-button", "Изменить"); edit.type = "button";
+    edit.addEventListener("click", () => openWorkoutEditor("plan", plan, plan.date, "#calendar"));
+    const start = element("button", "small-button", "Начать"); start.type = "button"; start.addEventListener("click", () => startCalendarPlan(plan));
+    const remove = element("button", "text-button danger", "Удалить"); remove.type = "button";
+    remove.addEventListener("click", () => { if (!confirm("Удалить план тренировки?")) return; data.plans = data.plans.filter(entry => entry.id !== plan.id); save(); renderCalendar(); });
+    actions.append(edit, start, remove); card.append(actions); list.append(card);
+  });
+  if (!sessions.length && !dailyPlans.length) empty(list, "На эту дату тренировок пока нет. Нажми плюс, чтобы составить план.");
+}
+function initCalendar() {
+  document.querySelector("#calendar-add").addEventListener("click", () => openWorkoutEditor("plan", null, calendarDate, "#calendar"));
+  for (const [id, direction] of [["calendar-prev", -1], ["calendar-next", 1]]) {
+    document.querySelector("#" + id).addEventListener("click", () => {
+      const date = new Date(calendarYear, calendarMonth + direction, 1);
+      calendarYear = date.getFullYear(); calendarMonth = date.getMonth();
+      calendarDate = `${calendarYear}-${String(calendarMonth + 1).padStart(2, "0")}-01`; renderCalendar();
+    });
+  }
+  document.querySelector("#calendar-today").addEventListener("click", () => {
+    calendarDate = today(); calendarYear = new Date().getFullYear(); calendarMonth = new Date().getMonth(); renderCalendar();
+  });
+  document.querySelector("#hero-record").addEventListener("click", event => { event.preventDefault(); openWorkoutEditor(); });
+}
+
 function navigate() {
   const requested = location.hash.slice(1);
-  const page = ["overview", "training", "nutrition", "learn", "workout-flow", "workout-live", "workout-result", "workout-record"].includes(requested) ? requested : "overview";
+  const page = ["overview", "training", "nutrition", "learn", "workout-flow", "workout-live", "workout-result", "workout-record", "calendar"].includes(requested) ? requested : "overview";
   document.querySelectorAll(".page").forEach(node => node.classList.toggle("active", node.id === page));
   document.body.classList.toggle("immersive", ["workout-flow", "workout-live", "workout-result", "workout-record"].includes(page));
   document.body.classList.toggle("workout-navigation", page === "workout-live");
   document.querySelectorAll("[data-page]").forEach(node => {
-    const active = node.dataset.page === (page === "workout-live" ? "training" : page);
+    const active = node.dataset.page === (["workout-live", "calendar"].includes(page) ? "training" : page);
     node.classList.toggle("active", active);
     if (active) node.setAttribute("aria-current", "page"); else node.removeAttribute("aria-current");
   });
-  document.querySelector("#page-title").textContent = ({ overview: "Обзор", training: "Тренировки", nutrition: "Питание", learn: "База знаний", "workout-flow": "Новая тренировка", "workout-live": "Тренировка", "workout-result": "Результат", "workout-record": "Записать тренировку" })[page];
+  document.querySelector("#page-title").textContent = ({ overview: "Обзор", training: "Тренировки", nutrition: "Питание", learn: "База знаний", "workout-flow": "Новая тренировка", "workout-live": "Тренировка", "workout-result": "Результат", "workout-record": "Записать тренировку", calendar: "Календарь" })[page];
   window.scrollTo(0, 0);
 }
 
@@ -1538,5 +1675,6 @@ document.querySelector("#food-form").addEventListener("submit", event => {
 window.addEventListener("hashchange", navigate);
 setInterval(() => { renderTimer(); updateLiveDuration(); renderLiveRest(); }, 1000);
 initRecordedWorkout();
+initCalendar();
 render(); navigate();
 if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("./sw.js").catch(() => {});
