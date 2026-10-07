@@ -41,14 +41,16 @@
         </header>
 
         <section class="page active" id="overview" aria-labelledby="page-title">
-          <div class="hero">
-            <div><span class="hero-kicker">НАЧНИ С СЕГОДНЯ</span><h2>Твой темп.<br /><em>Твой прогресс.</em></h2><p>Записывай тренировки и питание. Смотри, как усилия превращаются в результат.</p><div class="hero-actions"><a class="button button-light" id="hero-start" href="#workout-flow">Начать тренировку </a><a class="button hero-record" id="hero-record" href="#workout-record">Записать тренировку </a></div><a class="hero-calendar" href="#calendar">Календарь</a><button class="hero-secondary" id="hero-new" type="button" hidden>Новая тренировка</button></div>
-            <div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="art-core">↑</div><div class="art-label">ДВИГАЙСЯ<br />ВПЕРЁД</div></div>
+          <div class="hero overview-launch">
+            <div class="overview-focus"><span class="eyebrow" id="overview-focus-caption">СЕГОДНЯ</span><div class="overview-focus-title"><span class="overview-focus-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M7 7v10M17 7v10M3 10v4M21 10v4M7 12h10"/></svg></span><h2 id="overview-focus-name">Твой старт</h2></div><p id="overview-focus-last">Начни с первой тренировки</p></div>
+            <div class="start-orbit"><a class="overview-start" id="hero-start" href="#workout-flow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M7 7v10M17 7v10M3 10v4M21 10v4M7 12h10"/></svg><span>Начать<br>тренировку</span><span class="start-arrow" aria-hidden="true">→</span></a></div>
+            <div class="hero-actions overview-shortcuts"><a class="hero-record" id="hero-record" href="#workout-record"><span class="shortcut-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 3 5 5L8 21H3v-5Z M13 6l5 5"/></svg></span><span>Записать<br>тренировку</span></a><a class="hero-calendar" href="#calendar"><span class="shortcut-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4m10-4v4M3 11h18M8 15h1m6 0h1m-8 3h1"/></svg></span><span>Календарь</span></a></div>
+            <button class="hero-secondary" id="hero-new" type="button" hidden>Новая тренировка</button>
           </div>
           <div class="section-heading"><div><div class="eyebrow">ГЛАВНОЕ ЗА СЕГОДНЯ</div><h2>Всё под контролем</h2></div></div>
           <div class="stats-grid">
-            <article class="stat-card"><span>Тренировок всего</span><strong id="stat-workouts">0</strong><small>каждая запись имеет значение</small></article>
-            <article class="stat-card"><span>Рабочих подходов</span><strong id="stat-sets">0</strong><small>путь складывается из повторений</small></article>
+            <article class="stat-card"><span>Тренировок всего</span><strong id="stat-workouts">0</strong><small>за всё время</small></article>
+            <article class="stat-card"><span>Рабочих подходов</span><strong id="stat-sets">0</strong><small>выполнено</small></article>
             <article class="stat-card"><span>Калории сегодня</span><strong id="stat-calories">0 <i>ккал</i></strong><small id="stat-macros">Б 0 · Ж 0 · У 0 г</small></article>
           </div>
           <section class="panel today-panel"><div class="eyebrow">СЕГОДНЯШНИЙ ОРИЕНТИР</div><div id="today-plan" class="empty-state">Запиши тренировку, и здесь появится подсказка по следующему занятию.</div></section>

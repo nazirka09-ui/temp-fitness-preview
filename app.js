@@ -692,7 +692,17 @@ function renderHero() {
   const repeat = current ? null : repeatCandidate();
   const genitive = { "Грудь": "груди", "Спина": "спины", "Ноги": "ног", "Плечи": "плеч", "Руки": "рук", "Всё тело": "всего тела", "Своя тренировка": "свою тренировку" };
   const label = current ? "Продолжить тренировку" : repeat ? focusGroup(repeat) === "Своя тренировка" ? "Повторить последнюю тренировку" : `Повторить последнюю тренировку ${genitive[focusGroup(repeat)]}` : "Начать тренировку";
-  button.replaceChildren(document.createTextNode(`${label} `));
+  const icon = document.querySelector(".overview-focus-icon svg").cloneNode(true);
+  const title = element("span", "", label);
+  button.replaceChildren(icon, title, element("span", "start-arrow", "→"));
+  const completed = data.sessions.filter(session => session.status === "done" && session.exercises.some(exercise => exercise.sets.length)).sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt);
+  const scheduled = data.plans.find(plan => plan.date === today());
+  const candidate = current || scheduled || repeat || completed.at(-1);
+  const group = candidate ? focusGroup(candidate) : null;
+  document.querySelector("#overview-focus-name").textContent = scheduled && !current ? scheduled.title : group && group !== "Своя тренировка" ? group : candidate?.title || "Твой старт";
+  document.querySelector("#overview-focus-caption").textContent = current ? "ТРЕНИРОВКА ИДЁТ" : scheduled ? "ПЛАН НА СЕГОДНЯ" : "СЕГОДНЯ";
+  const previous = completed.filter(session => focusGroup(session) === group).at(-1);
+  document.querySelector("#overview-focus-last").textContent = previous ? `Последняя: ${daysAgo(previous.date)}` : current ? "Продолжай в своём темпе" : scheduled ? "Упражнения можно уточнить перед стартом" : "Начни с первой тренировки";
   button.href = current ? "#workout-live" : repeat ? "#workout-live" : "#workout-flow";
   secondary.hidden = !repeat;
   const trainingButton = document.querySelector("#training-start");
@@ -959,7 +969,7 @@ function persistLiveRest() {
 }
 function clearLiveRest() { liveRest = null; persistLiveRest(); }
 function startLiveRest(session) {
-  liveRest = { sessionId: session.id, endAt: Date.now() + liveRestSeconds * 1000, remaining: liveRestSeconds, paused: false };
+  liveRest = { sessionId: session.id, endAt: Date.now() + liveRestSeconds * 1000, remaining: liveRestSeconds, total: liveRestSeconds, paused: false };
   persistLiveRest();
   startTimer(liveRestSeconds);
   renderLiveRest();
@@ -979,7 +989,12 @@ function renderLiveRest() {
   form.hidden = active;
   if (!active) return;
   rest.querySelector("[data-rest-time]").textContent = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-  rest.querySelector("[data-rest-pause]").textContent = liveRest.paused ? "Продолжить" : "Пауза";
+  const total = Math.max(seconds, liveRest.total || liveRestSeconds);
+  rest.querySelector(".rest-progress").style.strokeDashoffset = 100 * (1 - seconds / total);
+  rest.querySelector("[data-rest-total]").textContent = `из ${String(Math.floor(total / 60)).padStart(1, "0")}:${String(total % 60).padStart(2, "0")}`;
+  const pause = rest.querySelector("[data-rest-pause]");
+  pause.querySelector(".rest-control-label").textContent = liveRest.paused ? "Продолжить" : "Пауза";
+  pause.querySelector(".rest-control-icon").innerHTML = liveRest.paused ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 12 7-12 7Z"/></svg>' : '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
 }
 function pauseLiveRest() {
   if (!liveRest) return;
@@ -990,8 +1005,10 @@ function pauseLiveRest() {
 function skipLiveRest() { clearLiveRest(); timerEnd = 0; localStorage.removeItem(TIMER_KEY); renderTimer(); renderLiveRest(); }
 function addLiveRestTime() {
   if (!liveRest) return;
+  const total = Math.max(liveRestRemaining(), liveRest.total || liveRestSeconds);
   if (liveRest.paused) liveRest.remaining += 30;
   else liveRest.endAt += 30000;
+  liveRest.total = total + 30;
   persistLiveRest(); renderLiveRest();
 }
 function liveAddExerciseForm(session) {
@@ -1338,7 +1355,12 @@ function renderLive() {
   });
   target.append(completed);
   const rest = element("div", "live-rest"); rest.id = "live-rest";
-  rest.innerHTML = '<div class="eyebrow">МЕЖДУ ПОДХОДАМИ</div><h4>Отдых</h4><div class="live-rest-time" data-rest-time role="timer">01:30</div><div class="live-rest-actions"><button type="button" data-rest-pause>Пауза</button><button type="button" data-rest-skip>Пропустить</button><button type="button" data-rest-add>+30 секунд</button></div>';
+  const count = exercise.sets.length;
+  const totalSets = Math.max(exercise.plannedSets || 3, count);
+  const nextExercise = count >= totalSets ? session.exercises[session.exercises.indexOf(exercise) + 1] : null;
+  rest.innerHTML = `<div class="rest-dial"><svg class="rest-ring" viewBox="0 0 320 320" aria-hidden="true"><circle class="rest-outer" cx="160" cy="160" r="151"/><circle class="rest-track" cx="160" cy="160" r="137"/><circle class="rest-progress" cx="160" cy="160" r="137" pathLength="100"/><circle class="rest-inner" cx="160" cy="160" r="120"/></svg><div class="rest-dial-content"><div class="eyebrow">ОТДЫХ</div><div class="rest-set-caption">ПОСЛЕ ПОДХОДА ${count}</div><div class="live-rest-time" data-rest-time role="timer">01:30</div><div class="rest-total" data-rest-total>из 2:00</div></div></div><div class="rest-next"><span class="rest-next-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M7 7v10M17 7v10M3 10v4M21 10v4M7 12h10"/></svg></span><div><span class="eyebrow">${nextExercise ? "СЛЕДУЮЩЕЕ УПРАЖНЕНИЕ" : count >= totalSets ? "ПОСЛЕ ОТДЫХА" : "СЛЕДУЮЩИЙ ПОДХОД"}</span><strong data-rest-next></strong></div></div><div class="live-rest-actions"><button type="button" data-rest-skip><span class="rest-control-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 5 9 7-9 7Zm10 0 9 7-9 7Z"/></svg></span><span class="rest-control-label">Пропустить</span></button><button type="button" data-rest-pause><span class="rest-control-icon"></span><span class="rest-control-label">Пауза</span></button><button type="button" data-rest-add><span class="rest-control-icon rest-plus">+30</span><span class="rest-control-label">+30 сек</span></button></div><div class="rest-sets"><div><span class="eyebrow">ПОДХОДЫ</span><div class="rest-set-chips"></div></div><div class="rest-set-summary"><strong>${count} / ${totalSets}</strong><span>ЗАВЕРШЕНО</span></div></div>`;
+  rest.querySelector("[data-rest-next]").textContent = nextExercise?.name || (count >= totalSets ? "Завершить упражнение" : exercise.name);
+  for (let i = 0; i < totalSets; i++) rest.querySelector(".rest-set-chips").append(element("span", i < count ? "done" : i === count ? "next" : "", i < count ? "✓" : String(i + 1)));
   rest.querySelector("[data-rest-pause]").addEventListener("click", pauseLiveRest);
   rest.querySelector("[data-rest-skip]").addEventListener("click", skipLiveRest);
   rest.querySelector("[data-rest-add]").addEventListener("click", addLiveRestTime);
