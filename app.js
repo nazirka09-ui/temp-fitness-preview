@@ -1,3 +1,4 @@
+import { initNutrition, renderNutritionDiary } from "./nutrition.mjs?v=1";
 import { GROUPS, exerciseKey, exerciseHistory, sessionVolume, groupOverview, suggestedGoal, recordChanges, sessionSummary, plateauDetected, estimatedMax, bestSet, dayDistance, repeatWorkoutCandidate } from "./metrics.mjs?v=5";
 
 const STORAGE_KEY = "temp-health-v1";
@@ -629,20 +630,7 @@ function renderFood() {
   document.querySelector("#food-list-date").textContent = selectedDate === today() ? "сегодня" : formatDate(selectedDate);
   document.querySelector("#stat-calories").replaceChildren(document.createTextNode(`${formatNumber(todaySums.calories)} `), element("i", "", "ккал"));
   document.querySelector("#stat-macros").textContent = `Б ${formatNumber(todaySums.protein)} · Ж ${formatNumber(todaySums.fat)} · У ${formatNumber(todaySums.carbs)} г`;
-  const list = document.querySelector("#food-list");
-  if (!selectedFood.length) { empty(list, "За эту дату записей пока нет."); return; }
-  list.replaceChildren(...selectedFood.map(item => {
-    const row = element("div", "log-row");
-    const body = element("div", "row-body");
-    body.append(element("strong", "", item.name), element("span", "", `Б ${formatNumber(item.protein)} · Ж ${formatNumber(item.fat)} · У ${formatNumber(item.carbs)} г`));
-    const metric = element("div", "row-metric", `${formatNumber(item.calories)} ккал`);
-    const button = element("button", "delete-button", "×");
-    button.type = "button";
-    button.setAttribute("aria-label", `Удалить запись: ${item.name}`);
-    button.addEventListener("click", () => { data.food = data.food.filter(record => record.id !== item.id); save(); render(); });
-    row.append(body, metric, button);
-    return row;
-  }));
+  renderNutritionDiary(selectedFood);
 }
 
 function completedSessions() {
@@ -1904,13 +1892,7 @@ document.querySelectorAll("[data-timer-stop]").forEach(button => button.addEvent
   localStorage.removeItem(TIMER_KEY);
   renderTimer();
 }));
-document.querySelector("#food-form").addEventListener("submit", event => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const values = Object.fromEntries(new FormData(form));
-  data.food.push({ id: uid(), createdAt: Date.now(), date: values.date, name: values.name.trim(), calories: number(values.calories), protein: number(values.protein), fat: number(values.fat), carbs: number(values.carbs) });
-  save(); form.reset(); document.querySelector("#food-date").value = today(); document.querySelector("#food-view-date").value = values.date; render();
-});
+initNutrition({ data, save, render, today, uid });
 window.addEventListener("hashchange", navigate);
 setInterval(() => { renderTimer(); updateLiveDuration(); renderLiveRest(); }, 1000);
 initRecordedWorkout();
