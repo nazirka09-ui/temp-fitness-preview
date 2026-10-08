@@ -1215,7 +1215,7 @@ function updateRecordWizardNext() {
 }
 function initRecordedWorkout() {
   const form = document.querySelector("#record-workout-form");
-  form.elements.date.value = today(); form.elements.date.max = today();
+  form.elements.date.value = today(); form.elements.date.removeAttribute("max");
   const options = document.querySelector("#record-exercise-options");
   for (const name of [...new Set([...CATALOG, ...data.sessions.flatMap(session => session.exercises.map(exercise => exercise.name))])]) {
     const option = element("option"); option.value = name; options.append(option);
@@ -1585,7 +1585,6 @@ function openWorkoutEditor(kind = "session", original = null, date = today(), re
   const form = document.querySelector("#record-workout-form");
   form.reset(); form.elements.title.setCustomValidity("");
   form.elements.date.removeAttribute("max");
-  if (kind !== "plan" && original?.status !== "active") form.elements.date.max = today();
   form.elements.title.value = original?.title || "";
   form.elements.date.value = original?.date || date;
   form.elements.activity.value = original?.activity || "Силовая";
@@ -1640,7 +1639,7 @@ function renderCalendar() {
     button.addEventListener("click", () => {
       calendarDate = date;
       renderCalendar();
-      openWorkoutEditor("plan", null, date, "#calendar");
+      openCalendarWorkoutChoice(date);
     });
     grid.append(button);
   }
@@ -1664,10 +1663,32 @@ function renderCalendar() {
     remove.addEventListener("click", () => { if (!confirm("Удалить план тренировки?")) return; data.plans = data.plans.filter(entry => entry.id !== plan.id); save(); renderCalendar(); });
     actions.append(edit, start, remove); card.append(actions); list.append(card);
   });
-  if (!sessions.length && !dailyPlans.length) empty(list, "На эту дату тренировок пока нет. Нажми дату или плюс, чтобы составить план.");
+  if (!sessions.length && !dailyPlans.length) empty(list, "На эту дату тренировок пока нет. Нажми дату или плюс, чтобы записать тренировку или составить план.");
+}
+function openCalendarWorkoutChoice(date) {
+  let dialog = document.querySelector("#calendar-workout-choice");
+  if (!dialog) {
+    dialog = element("dialog", "calendar-workout-choice"); dialog.id = "calendar-workout-choice";
+    document.body.append(dialog);
+  }
+  dialog.replaceChildren();
+  const header = element("div", "panel-head");
+  header.append(element("h3", "", "Добавить тренировку"));
+  const close = element("button", "icon-button", "×"); close.type = "button"; close.setAttribute("aria-label", "Закрыть");
+  close.addEventListener("click", () => dialog.close()); header.append(close);
+  const caption = element("p", "calendar-choice-date", new Date(date + "T12:00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" }));
+  caption.id = "calendar-choice-date"; dialog.setAttribute("aria-labelledby", caption.id);
+  dialog.append(header, caption);
+  for (const [kind, title, description] of [["session", "Записать выполненную", "Уже тренировался — добавить подходы и результаты."], ["plan", "Запланировать тренировку", "Записать план. Он не попадёт в статистику выполненных."]]) {
+    const button = element("button", "calendar-choice-option"); button.type = "button"; button.dataset.kind = kind;
+    button.append(element("strong", "", title), element("span", "", description));
+    button.addEventListener("click", () => { dialog.close(); openWorkoutEditor(kind, null, date, "#calendar"); });
+    dialog.append(button);
+  }
+  dialog.showModal();
 }
 function initCalendar() {
-  document.querySelector("#calendar-add").addEventListener("click", () => openWorkoutEditor("plan", null, calendarDate, "#calendar"));
+  document.querySelector("#calendar-add").addEventListener("click", () => openCalendarWorkoutChoice(calendarDate));
   for (const [id, direction] of [["calendar-prev", -1], ["calendar-next", 1]]) {
     document.querySelector("#" + id).addEventListener("click", () => {
       const date = new Date(calendarYear, calendarMonth + direction, 1);
