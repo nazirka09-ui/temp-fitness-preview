@@ -22,7 +22,7 @@ export function exerciseHistory(sessions, name, omitSessionId = null) {
   const key = exerciseKey(name);
   return sessions.filter(session => session.id !== omitSessionId).flatMap(session =>
     session.exercises.filter(exercise => exerciseKey(exercise.name) === key && exercise.sets.length).map(exercise => {
-      const weighted = exercise.sets.filter(set => Number(set.weight) > 0);
+      const weighted = exercise.sets.filter(set => Number(set.weight) > 0 && Number(set.reps) > 0);
       const topWeight = weighted.length ? Math.max(...weighted.map(set => Number(set.weight))) : 0;
       return {
         sessionId: session.id, date: session.date, createdAt: session.createdAt || 0, name: exercise.name,
@@ -42,7 +42,7 @@ export function groupVolume(session, group) {
   return session.exercises.filter(exercise => (exercise.group || "Другое") === group).reduce((total, exercise) => total + volumeOfSets(exercise.sets), 0);
 }
 export function bestSet(sets) {
-  return [...sets].sort((a, b) => (estimatedMax(b) || 0) - (estimatedMax(a) || 0) || Number(b.weight) - Number(a.weight) || Number(b.reps) - Number(a.reps))[0] || null;
+  return [...sets].filter(set => set.weight != null && Number(set.reps) > 0).sort((a, b) => (estimatedMax(b) || 0) - (estimatedMax(a) || 0) || Number(b.weight) - Number(a.weight) || Number(b.reps) - Number(a.reps))[0] || null;
 }
 
 export function suggestedGoal(history) {
@@ -73,7 +73,7 @@ export function recordChanges(entry, previous) {
     const weight = Number(set.weight) || 0;
     if (weight > 0) priorBestAtSameWeight.set(weight, Math.max(priorBestAtSameWeight.get(weight) || 0, Number(set.reps) || 0));
   }
-  if (entry.sets.some(set => Number(set.weight) > 0 && priorBestAtSameWeight.has(Number(set.weight)) && Number(set.reps) > priorBestAtSameWeight.get(Number(set.weight)))) changes.push("Больше повторений с тем же весом");
+  if (entry.sets.some(set => Number(set.weight) > 0 && Number(set.reps) > 0 && priorBestAtSameWeight.has(Number(set.weight)) && Number(set.reps) > priorBestAtSameWeight.get(Number(set.weight)))) changes.push("Больше повторений с тем же весом");
   if (entry.bestEstimate > Math.max(...previous.map(item => item.bestEstimate), 0)) changes.push("Новая расчётная сила");
   if (entry.volume > Math.max(...previous.map(item => item.volume), 0)) changes.push("Наибольший объём упражнения");
   return changes;

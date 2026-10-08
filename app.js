@@ -1,4 +1,4 @@
-import { GROUPS, exerciseKey, exerciseHistory, sessionVolume, groupOverview, suggestedGoal, recordChanges, sessionSummary, plateauDetected, estimatedMax, bestSet, dayDistance, repeatWorkoutCandidate } from "./metrics.mjs?v=4";
+import { GROUPS, exerciseKey, exerciseHistory, sessionVolume, groupOverview, suggestedGoal, recordChanges, sessionSummary, plateauDetected, estimatedMax, bestSet, dayDistance, repeatWorkoutCandidate } from "./metrics.mjs?v=5";
 
 const STORAGE_KEY = "temp-health-v1";
 const TIMER_KEY = "temp-rest-timer-v1";
@@ -94,6 +94,7 @@ function loadData() {
 const data = loadData();
 const save = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 let workoutEdit = null;
+let recordWizard = null;
 let calendarDate = today();
 let calendarMonth = new Date().getMonth();
 let calendarYear = new Date().getFullYear();
@@ -118,7 +119,7 @@ function empty(target, message) { target.replaceChildren(element("p", "empty-sta
 function activeSession() { return data.sessions.find(session => session.status === "active"); }
 function allSets() { return data.sessions.flatMap(session => session.exercises.flatMap(exercise => exercise.sets.map(set => ({ ...set, date: session.date, activity: session.activity, exercise: exercise.name })))); }
 function isRun(session) { return session.activity === "Бег"; }
-function setText(set, run) { return run ? `${formatNumber(set.reps)} мин` : `${formatNumber(set.weight)} кг × ${formatNumber(set.reps)}`; }
+function setText(set, run) { return run ? `${formatNumber(set.reps)} мин` : `${set.weight == null ? "вес не указан" : formatNumber(set.weight) + " кг"} × ${set.reps == null ? "повторы не указаны" : formatNumber(set.reps)}`; }
 
 function renderTemplates() {
   const target = document.querySelector("#template-list");
@@ -1071,7 +1072,7 @@ function addRecordedSet(card, source = null) {
 function updateRecordedFields() {
   const running = document.querySelector("#record-workout-form").elements.activity.value === "Бег";
   document.querySelectorAll(".record-exercise").forEach((card, index) => {
-    card.querySelector(".record-exercise-heading").textContent = `Упражнение ${index + 1}`;
+    card.querySelector(".record-exercise-heading").textContent = recordWizard && recordCardName(card) ? recordCardName(card) : `Упражнение ${index + 1}`;
     const rows = card.querySelectorAll(".record-set-row");
     rows.forEach((row, setIndex) => {
       row.querySelector(".record-set-number").textContent = running ? `Отрезок ${setIndex + 1}` : `Подход ${setIndex + 1}`;
@@ -1081,7 +1082,7 @@ function updateRecordedFields() {
       row.querySelector('[name="reps"]').step = running ? "0.1" : "1";
       row.querySelector(".record-effort").hidden = running;
       row.querySelector(".record-remove-set").disabled = false;
-      row.querySelector('[name="reps"]').required = workoutEdit?.kind !== "plan";
+      row.querySelector('[name="reps"]').required = running && workoutEdit?.kind !== "plan";
     });
     if (card.setEditor) {
       card.setEditor.inputs.weight.parentElement.hidden = running;
@@ -1104,13 +1105,19 @@ function addRecordedExercise(source = null) {
   const details = element("div", "form-row");
   const picker = exercisePicker(source?.group || "Ноги", source, "exerciseName");
   details.append(picker.nameLabel, picker.groupLabel);
+  let pickerContainer = details;
+  if (recordWizard && source?.name) {
+    pickerContainer = element("details", "compact-set-details record-picker-details");
+    pickerContainer.append(element("summary", "", "Заменить упражнение"), details);
+  }
+  details.addEventListener("change", updateRecordedFields);
   const rows = element("div", "record-sets");
   const add = element("button", "small-button record-add-set", "Добавить подход"); add.type = "button";
   add.addEventListener("click", () => {
     const last = rows.lastElementChild;
     addRecordedSet(card, last ? { weight: last.querySelector('[name="weight"]').value, reps: last.querySelector('[name="reps"]').value } : null);
   });
-  card.append(header, details, rows, add);
+  card.append(header, pickerContainer, rows, add);
   document.querySelector("#record-exercises").append(card);
   if (source) source.sets.forEach(set => addRecordedSet(card, set));
   else for (let i = 0; i < 3; i++) addRecordedSet(card);
@@ -1123,9 +1130,88 @@ function addRecordedExercise(source = null) {
   card.append(editor); card.setEditor = editor;
   rows.addEventListener("input", () => editor.sync());
   rows.addEventListener("change", () => editor.sync());
-  card.addEventListener("invalid", () => { editor.querySelector("details").open = true; }, true);
+  card.addEventListener("invalid", () => { editor.querySelector("details").open = true; if (pickerContainer.tagName === "DETAILS") pickerContainer.open = true; }, true);
   updateRecordedFields();
   return card;
+}
+function recordCards() { return [...document.querySelectorAll(".record-exercise")]; }
+function recordCardName(card) { return card.querySelector('[name="exerciseName"]').value; }
+function recordSelection(entry, checked, targets = null) {
+  const card = recordCards().find(card => exerciseKey(recordCardName(card)) === exerciseKey(entry.name));
+  if (!checked) { card?.remove(); updateRecordedFields(); return; }
+  if (card) return;
+  addRecordedExercise({ name: entry.name, group: entry.group, sets: targets?.length ? targets.map(set => ({ weight: set.weight ?? "", reps: set.reps || "" })) : Array.from({ length: 3 }, () => ({ weight: "", reps: "" })) });
+}
+function renderRecordWizard() {
+  const target = document.querySelector("#record-wizard");
+  const form = document.querySelector("#record-workout-form");
+  target.replaceChildren(); target.hidden = !recordWizard;
+  const final = !recordWizard || recordWizard.step === 3;
+  for (const node of [form.querySelector(".record-details"), document.querySelector("#record-exercises"), document.querySelector("#record-add-exercise"), document.querySelector(".record-save")]) node.hidden = !final;
+  if (!recordWizard) return;
+  const step = recordWizard.step;
+  target.append(element("div", "eyebrow record-step", `ШАГ ${step} / 3`));
+  document.querySelector("#workout-record .flow-title").textContent = step === 1 ? "Что ты тренировал?" : step === 2 ? "Какие упражнения сделал?" : "Записать результаты";
+  document.querySelector("#workout-record .flow-subtitle").textContent = step === 1 ? "Выбери одну или несколько групп мышц." : step === 2 ? "Отметь упражнения. На следующем шаге укажи выполненные подходы." : "Это выполненная тренировка. Достаточно числа подходов; вес и повторы можно уточнить позже.";
+  if (step > 1) {
+    const back = element("button", "text-button record-wizard-back", "← Назад"); back.type = "button";
+    back.addEventListener("click", () => { recordWizard.step--; renderRecordWizard(); window.scrollTo(0, 0); }); target.append(back);
+  }
+  if (step === 1) {
+    const grid = element("div", "flow-group-grid record-muscle-groups");
+    for (const group of [...Object.values(LIBRARY_GROUPS), "Другое"]) {
+      const button = element("button", "flow-group-card" + (recordWizard.groups.includes(group) ? " selected" : ""), group); button.type = "button"; button.dataset.group = group;
+      button.setAttribute("aria-pressed", String(recordWizard.groups.includes(group)));
+      button.addEventListener("click", () => {
+        recordWizard.groups = recordWizard.groups.includes(group) ? recordWizard.groups.filter(value => value !== group) : [...recordWizard.groups, group];
+        renderRecordWizard();
+      }); grid.append(button);
+    }
+    target.append(grid);
+  }
+  if (step === 2) {
+    for (const group of recordWizard.groups) {
+      const section = element("section", "record-choice-group"); section.append(element("h3", "", group));
+      const previous = data.sessions.filter(session => session.status === "done" && session.exercises.some(exercise => exercise.group === group && exercise.sets.length)).sort((a,b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt).at(-1);
+      if (previous) {
+        const repeat = element("button", "small-button record-take-previous", "Взять упражнения из прошлой"); repeat.type = "button";
+        repeat.addEventListener("click", () => { previous.exercises.filter(exercise => exercise.group === group && exercise.sets.length).forEach(exercise => recordSelection(exercise, true, exercise.sets)); renderRecordWizard(); });
+        section.append(repeat, element("p", "form-help", `Последняя: ${daysAgo(previous.date)}. Проверь веса и повторы перед сохранением.`));
+      }
+      const entries = new Map(EXERCISE_LIBRARY.filter(entry => entry.group === group).map(entry => [exerciseKey(entry.name), entry]));
+      if (previous) previous.exercises.filter(entry => entry.group === group).forEach(entry => entries.set(exerciseKey(entry.name), entry));
+      recordCards().filter(card => card.querySelector('[name="group"]').value === group).forEach(card => { const name = recordCardName(card); if (name) entries.set(exerciseKey(name), { name, group }); });
+      const list = element("div", "record-exercise-choices");
+      for (const entry of entries.values()) {
+        const label = element("label", "record-exercise-choice");
+        const checkbox = element("input"); checkbox.type = "checkbox"; checkbox.value = entry.name;
+        checkbox.checked = recordCards().some(card => exerciseKey(recordCardName(card)) === exerciseKey(entry.name));
+        checkbox.addEventListener("change", () => { recordSelection(entry, checkbox.checked); updateRecordWizardNext(); });
+        label.append(checkbox, element("span", "", entry.name)); list.append(label);
+      }
+      if (!entries.size) list.append(element("p", "form-help", "Добавь своё упражнение на следующем шаге."));
+      section.append(list); target.append(section);
+    }
+    const custom = element("button", "small-button record-custom-choice", "Другое — своё упражнение"); custom.type = "button";
+    custom.addEventListener("click", () => { const card = addRecordedExercise(); const group = card.querySelector('[name="group"]'); group.value = recordWizard.groups[0] || "Другое"; group.dispatchEvent(new Event("change")); const select = card.querySelector('[name="exerciseChoice"]'); select.value = "__custom"; select.dispatchEvent(new Event("change")); recordWizard.step = 3; renderRecordWizard(); card.querySelector('[name="exerciseName"]').focus(); });
+    target.append(custom);
+  }
+  if (step < 3) {
+    const next = element("button", "button button-dark record-wizard-next", "Далее"); next.type = "button";
+    next.addEventListener("click", () => {
+      if (step === 1) {
+        const newTitle = recordWizard.groups.join(" и ");
+        if (!form.elements.title.value || form.elements.title.value === recordWizard.autoTitle) form.elements.title.value = newTitle;
+        recordWizard.autoTitle = newTitle;
+        recordCards().filter(card => !recordWizard.groups.includes(card.querySelector('[name="group"]').value)).forEach(card => card.remove());
+      }
+      recordWizard.step++; renderRecordWizard(); window.scrollTo(0, 0);
+    }); target.append(next); updateRecordWizardNext();
+  }
+}
+function updateRecordWizardNext() {
+  const next = document.querySelector(".record-wizard-next");
+  if (next && recordWizard) next.disabled = recordWizard.step === 1 ? !recordWizard.groups.length : !recordCards().length;
 }
 function initRecordedWorkout() {
   const form = document.querySelector("#record-workout-form");
@@ -1142,6 +1228,7 @@ function initRecordedWorkout() {
   });
   form.addEventListener("submit", event => {
     event.preventDefault();
+    if (recordWizard && recordWizard.step !== 3) return;
     const cards = [...document.querySelectorAll(".record-exercise")];
     const kind = workoutEdit?.kind || "session";
     if (!cards.length && kind !== "plan") { addRecordedExercise().querySelector('[name="exerciseChoice"]').focus(); return; }
@@ -1157,8 +1244,8 @@ function initRecordedWorkout() {
       completed: original?.status === "active" ? Boolean(card.sourceExercise?.completed) : kind !== "plan",
       sets: [...card.querySelectorAll(".record-set-row")].map(row => ({
         ...row.sourceSet,
-        id: row.sourceSet?.id || uid(), weight: running ? 0 : number(row.querySelector('[name="weight"]').value),
-        reps: number(row.querySelector('[name="reps"]').value),
+        id: row.sourceSet?.id || uid(), weight: running ? 0 : row.querySelector('[name="weight"]').value.trim() ? number(row.querySelector('[name="weight"]').value) : null,
+        reps: row.querySelector('[name="reps"]').value ? number(row.querySelector('[name="reps"]').value) : null,
         note: running ? "" : row.querySelector('[name="note"]').value, createdAt: row.sourceSet?.createdAt || createdAt,
       })),
     }));
@@ -1186,7 +1273,7 @@ function initRecordedWorkout() {
     calendarMonth = date.getMonth(); calendarYear = date.getFullYear();
     const destination = workoutEdit?.returnTo || (kind === "plan" ? "#calendar" : "#workout-result");
     if (kind !== "plan") resultSessionId = session.id;
-    workoutEdit = null;
+    workoutEdit = null; recordWizard = null; renderRecordWizard();
     form.reset(); form.elements.date.value = today();
     document.querySelector("#record-exercises").replaceChildren(); addRecordedExercise();
     render(); location.hash = destination;
@@ -1494,6 +1581,7 @@ function render() { renderTemplates(); renderWorkouts(); renderFood(); renderTim
 
 function openWorkoutEditor(kind = "session", original = null, date = today(), returnTo = null) {
   workoutEdit = { kind, original: original ? structuredClone(original) : null, returnTo };
+  recordWizard = kind === "session" && !original ? { step: 1, groups: [], autoTitle: "" } : null;
   const form = document.querySelector("#record-workout-form");
   form.reset(); form.elements.title.setCustomValidity("");
   form.elements.date.removeAttribute("max");
@@ -1511,7 +1599,8 @@ function openWorkoutEditor(kind = "session", original = null, date = today(), re
   document.querySelector(".record-back").href = returnTo || (kind === "plan" ? "#calendar" : "#overview");
   document.querySelector("#record-exercises").replaceChildren();
   if (original?.exercises.length) original.exercises.forEach(exercise => addRecordedExercise(exercise));
-  else if (kind !== "plan") addRecordedExercise();
+  else if (kind !== "plan" && !recordWizard) addRecordedExercise();
+  renderRecordWizard();
   updateRecordedFields();
   location.hash = "#workout-record";
 }
@@ -1595,6 +1684,7 @@ function initCalendar() {
 function navigate() {
   const requested = location.hash.slice(1);
   const page = ["overview", "training", "nutrition", "learn", "workout-flow", "workout-live", "workout-result", "workout-record", "calendar"].includes(requested) ? requested : "overview";
+  if (page === "workout-record" && !workoutEdit) openWorkoutEditor();
   document.querySelectorAll(".page").forEach(node => node.classList.toggle("active", node.id === page));
   document.body.classList.toggle("immersive", ["workout-flow", "workout-live", "workout-result", "workout-record"].includes(page));
   document.body.classList.toggle("workout-navigation", page === "workout-live");
