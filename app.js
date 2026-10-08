@@ -1548,7 +1548,11 @@ function renderCalendar() {
     button.type = "button"; button.dataset.date = date;
     button.setAttribute("aria-label", new Date(date + "T12:00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" }) + (done ? ", тренировка завершена" : "") + (planned ? ", есть план" : ""));
     button.setAttribute("aria-pressed", String(date === calendarDate));
-    button.addEventListener("click", () => { calendarDate = date; renderCalendar(); });
+    button.addEventListener("click", () => {
+      calendarDate = date;
+      renderCalendar();
+      openWorkoutEditor("plan", null, date, "#calendar");
+    });
     grid.append(button);
   }
   document.querySelector("#calendar-day-title").textContent = new Date(calendarDate + "T12:00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
@@ -1571,7 +1575,7 @@ function renderCalendar() {
     remove.addEventListener("click", () => { if (!confirm("Удалить план тренировки?")) return; data.plans = data.plans.filter(entry => entry.id !== plan.id); save(); renderCalendar(); });
     actions.append(edit, start, remove); card.append(actions); list.append(card);
   });
-  if (!sessions.length && !dailyPlans.length) empty(list, "На эту дату тренировок пока нет. Нажми плюс, чтобы составить план.");
+  if (!sessions.length && !dailyPlans.length) empty(list, "На эту дату тренировок пока нет. Нажми дату или плюс, чтобы составить план.");
 }
 function initCalendar() {
   document.querySelector("#calendar-add").addEventListener("click", () => openWorkoutEditor("plan", null, calendarDate, "#calendar"));
