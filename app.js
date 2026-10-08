@@ -15,7 +15,7 @@ const TEMPLATES = [
 // The knowledge library is the single source for guided exercise choices.
 const LIBRARY_GROUPS = { legs: "Ноги", glutes: "Ягодицы", back: "Спина", chest: "Грудь", shoulders: "Плечи", arms: "Руки", core: "Кор" };
 const EXERCISE_LIBRARY = Object.entries(LIBRARY_GROUPS).flatMap(([id, group]) =>
-  [...document.querySelectorAll("#muscle-" + id + " .exercise-guide h4")].map(node => ({ name: node.textContent.trim(), group }))
+  [...document.querySelectorAll("#muscle-" + id + " .exercise-guide h4")].map(node => ({ name: node.textContent.trim(), group, muscles: node.parentElement.querySelector("p")?.textContent || "" }))
 );
 const CUSTOM_EXERCISES_KEY = "temp-custom-exercises-v1";
 const customExercises = (() => {
@@ -1134,6 +1134,16 @@ function addRecordedExercise(source = null) {
   updateRecordedFields();
   return card;
 }
+function recordGroupMatches(entry, group) {
+  if (!["Бицепс", "Трицепс"].includes(group)) return (entry.group || inferGroup(entry.name)) === group;
+  if ((entry.group || inferGroup(entry.name)) !== "Руки") return false;
+  const library = EXERCISE_LIBRARY.find(item => exerciseKey(item.name) === exerciseKey(entry.name));
+  const text = `${entry.name} ${library?.muscles || ""}`.toLocaleLowerCase("ru-RU");
+  const triceps = /трицепс|разгибани|француз/.test(text);
+  const biceps = /бицепс|сгибани|молот/.test(text) && !triceps;
+  return group === "Трицепс" ? triceps || !biceps : biceps || !triceps;
+}
+function recordCardEntry(card) { return { name: recordCardName(card), group: card.querySelector('[name="group"]').value }; }
 function recordCards() { return [...document.querySelectorAll(".record-exercise")]; }
 function recordCardName(card) { return card.querySelector('[name="exerciseName"]').value; }
 function recordSelection(entry, checked, targets = null) {
@@ -1148,10 +1158,11 @@ function renderRecordWizard() {
   target.replaceChildren(); target.hidden = !recordWizard;
   const final = !recordWizard || recordWizard.step === 3;
   for (const node of [form.querySelector(".record-details"), document.querySelector("#record-exercises"), document.querySelector("#record-add-exercise"), document.querySelector(".record-save")]) node.hidden = !final;
+  document.querySelector("#record-extra-details").open = !recordWizard;
   if (!recordWizard) return;
   const step = recordWizard.step;
   target.append(element("div", "eyebrow record-step", `ШАГ ${step} / 3`));
-  document.querySelector("#workout-record .flow-title").textContent = step === 1 ? "Что ты тренировал?" : step === 2 ? "Какие упражнения сделал?" : "Записать результаты";
+  document.querySelector("#workout-record .flow-title").textContent = step === 1 ? "Что тренировали?" : step === 2 ? "Какие упражнения выполняли?" : "Сколько сделали?";
   document.querySelector("#workout-record .flow-subtitle").textContent = step === 1 ? "Выбери одну или несколько групп мышц." : step === 2 ? "Отметь упражнения. На следующем шаге укажи выполненные подходы." : "Это выполненная тренировка. Достаточно числа подходов; вес и повторы можно уточнить позже.";
   if (step > 1) {
     const back = element("button", "text-button record-wizard-back", "← Назад"); back.type = "button";
@@ -1159,28 +1170,29 @@ function renderRecordWizard() {
   }
   if (step === 1) {
     const grid = element("div", "flow-group-grid record-muscle-groups");
-    for (const group of [...Object.values(LIBRARY_GROUPS), "Другое"]) {
-      const button = element("button", "flow-group-card" + (recordWizard.groups.includes(group) ? " selected" : ""), group); button.type = "button"; button.dataset.group = group;
-      button.setAttribute("aria-pressed", String(recordWizard.groups.includes(group)));
-      button.addEventListener("click", () => {
-        recordWizard.groups = recordWizard.groups.includes(group) ? recordWizard.groups.filter(value => value !== group) : [...recordWizard.groups, group];
-        renderRecordWizard();
-      }); grid.append(button);
+    for (const group of [...Object.values(LIBRARY_GROUPS).flatMap(group => group === "Руки" ? ["Бицепс", "Трицепс"] : [group]), "Другое"]) {
+      const label = element("label", "record-muscle-choice"); label.dataset.group = group;
+      const checkbox = element("input"); checkbox.type = "checkbox"; checkbox.checked = recordWizard.groups.includes(group);
+      checkbox.addEventListener("change", () => {
+        recordWizard.groups = checkbox.checked ? [...recordWizard.groups, group] : recordWizard.groups.filter(value => value !== group);
+        updateRecordWizardNext();
+      });
+      label.append(checkbox, element("span", "", group)); grid.append(label);
     }
     target.append(grid);
   }
   if (step === 2) {
     for (const group of recordWizard.groups) {
       const section = element("section", "record-choice-group"); section.append(element("h3", "", group));
-      const previous = data.sessions.filter(session => session.status === "done" && session.exercises.some(exercise => exercise.group === group && exercise.sets.length)).sort((a,b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt).at(-1);
+      const previous = data.sessions.filter(session => session.status === "done" && session.exercises.some(exercise => recordGroupMatches(exercise, group) && exercise.sets.length)).sort((a,b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt).at(-1);
       if (previous) {
         const repeat = element("button", "small-button record-take-previous", "Взять упражнения из прошлой"); repeat.type = "button";
-        repeat.addEventListener("click", () => { previous.exercises.filter(exercise => exercise.group === group && exercise.sets.length).forEach(exercise => recordSelection(exercise, true, exercise.sets)); renderRecordWizard(); });
+        repeat.addEventListener("click", () => { previous.exercises.filter(exercise => recordGroupMatches(exercise, group) && exercise.sets.length).forEach(exercise => recordSelection(exercise, true, exercise.sets)); renderRecordWizard(); });
         section.append(repeat, element("p", "form-help", `Последняя: ${daysAgo(previous.date)}. Проверь веса и повторы перед сохранением.`));
       }
-      const entries = new Map(EXERCISE_LIBRARY.filter(entry => entry.group === group).map(entry => [exerciseKey(entry.name), entry]));
-      if (previous) previous.exercises.filter(entry => entry.group === group).forEach(entry => entries.set(exerciseKey(entry.name), entry));
-      recordCards().filter(card => card.querySelector('[name="group"]').value === group).forEach(card => { const name = recordCardName(card); if (name) entries.set(exerciseKey(name), { name, group }); });
+      const entries = new Map(EXERCISE_LIBRARY.filter(entry => recordGroupMatches(entry, group)).map(entry => [exerciseKey(entry.name), entry]));
+      if (previous) previous.exercises.filter(entry => recordGroupMatches(entry, group)).forEach(entry => entries.set(exerciseKey(entry.name), entry));
+      recordCards().filter(card => recordGroupMatches(recordCardEntry(card), group)).forEach(card => { const name = recordCardName(card); if (name) entries.set(exerciseKey(name), recordCardEntry(card)); });
       const list = element("div", "record-exercise-choices");
       for (const entry of entries.values()) {
         const label = element("label", "record-exercise-choice");
@@ -1193,17 +1205,18 @@ function renderRecordWizard() {
       section.append(list); target.append(section);
     }
     const custom = element("button", "small-button record-custom-choice", "Другое — своё упражнение"); custom.type = "button";
-    custom.addEventListener("click", () => { const card = addRecordedExercise(); const group = card.querySelector('[name="group"]'); group.value = recordWizard.groups[0] || "Другое"; group.dispatchEvent(new Event("change")); const select = card.querySelector('[name="exerciseChoice"]'); select.value = "__custom"; select.dispatchEvent(new Event("change")); recordWizard.step = 3; renderRecordWizard(); card.querySelector('[name="exerciseName"]').focus(); });
+    custom.addEventListener("click", () => { const card = addRecordedExercise(); const group = card.querySelector('[name="group"]'); group.value = ["Бицепс", "Трицепс"].includes(recordWizard.groups[0]) ? "Руки" : recordWizard.groups[0] || "Другое"; group.dispatchEvent(new Event("change")); const select = card.querySelector('[name="exerciseChoice"]'); select.value = "__custom"; select.dispatchEvent(new Event("change")); recordWizard.step = 3; renderRecordWizard(); card.querySelector('[name="exerciseName"]').focus(); });
     target.append(custom);
   }
+  if (step === 3) target.append(element("p", "record-auto-title", form.elements.title.value));
   if (step < 3) {
     const next = element("button", "button button-dark record-wizard-next", "Далее"); next.type = "button";
     next.addEventListener("click", () => {
       if (step === 1) {
-        const newTitle = recordWizard.groups.join(" и ");
+        const newTitle = recordWizard.groups.map((group, index) => index ? group.toLocaleLowerCase("ru-RU") : group).join(" и ");
         if (!form.elements.title.value || form.elements.title.value === recordWizard.autoTitle) form.elements.title.value = newTitle;
         recordWizard.autoTitle = newTitle;
-        recordCards().filter(card => !recordWizard.groups.includes(card.querySelector('[name="group"]').value)).forEach(card => card.remove());
+        recordCards().filter(card => !recordWizard.groups.some(group => recordGroupMatches(recordCardEntry(card), group))).forEach(card => card.remove());
       }
       recordWizard.step++; renderRecordWizard(); window.scrollTo(0, 0);
     }); target.append(next); updateRecordWizardNext();
@@ -1215,6 +1228,9 @@ function updateRecordWizardNext() {
 }
 function initRecordedWorkout() {
   const form = document.querySelector("#record-workout-form");
+  form.addEventListener("invalid", event => {
+    if (event.target.closest("#record-extra-details")) document.querySelector("#record-extra-details").open = true;
+  }, true);
   form.elements.date.value = today(); form.elements.date.removeAttribute("max");
   const options = document.querySelector("#record-exercise-options");
   for (const name of [...new Set([...CATALOG, ...data.sessions.flatMap(session => session.exercises.map(exercise => exercise.name))])]) {
@@ -1750,7 +1766,7 @@ function customExerciseCard(entry) {
 }
 function updateLibraryCounts() {
   for (const [id, group] of Object.entries(LIBRARY_GROUPS)) {
-    const count = EXERCISE_LIBRARY.filter(entry => entry.group === group).length;
+    const count = EXERCISE_LIBRARY.filter(entry => recordGroupMatches(entry, group)).length;
     document.querySelector('[data-muscle="' + id + '"] span').textContent = count;
     document.querySelector("#muscle-" + id + " .section-heading p").textContent = count + " упражнений";
   }

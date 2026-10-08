@@ -93,12 +93,15 @@
             <div id="record-wizard" hidden></div>
             <form id="record-workout-form">
               <div class="panel record-details">
-                <label>Название тренировки<input name="title" type="text" maxlength="80" placeholder="Например, день ног" required /></label>
-                <div class="form-row">
-                  <label>Дата<input name="date" type="date" required /></label>
-                  <label>Вид активности<select name="activity"><option>Силовая</option><option>Кроссфит</option><option>Бег</option><option>Другая</option></select></label>
-                </div>
-                <label>Длительность, минут — необязательно<input name="duration" type="number" min="1" max="1440" step="1" placeholder="Например, 60" /></label>
+                <label>Дата тренировки<input name="date" type="date" required /></label>
+                <details id="record-extra-details" class="record-extra-details" open>
+                  <summary>Дополнительно</summary>
+                  <div class="record-extra-fields">
+                    <label>Название тренировки<input name="title" type="text" maxlength="80" placeholder="Название по выбранным группам" required /></label>
+                    <label>Вид активности<select name="activity"><option>Силовая</option><option>Кроссфит</option><option>Бег</option><option>Другая</option></select></label>
+                    <label>Длительность, минут — необязательно<input name="duration" type="number" min="1" max="1440" step="1" placeholder="Например, 60" /></label>
+                  </div>
+                </details>
               </div>
               <datalist id="record-exercise-options"></datalist>
               <div id="record-exercises"></div>

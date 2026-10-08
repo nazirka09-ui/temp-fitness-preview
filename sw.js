@@ -1,4 +1,4 @@
-const CACHE = "temp-app-v24";
+const CACHE = "temp-app-v25";
 const FILES = ["./", "./index.html", "./styles.css", "./app.js", "./metrics.mjs?v=5", "./icon.svg", "./manifest.webmanifest"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)).then(() => self.skipWaiting()));
