@@ -1,3 +1,4 @@
+import { initProgression, renderProgression } from "./progression.mjs?v=1";
 import { initNutrition, renderNutritionDiary } from "./nutrition.mjs?v=1";
 import { GROUPS, exerciseKey, exerciseHistory, sessionVolume, groupOverview, suggestedGoal, recordChanges, sessionSummary, plateauDetected, estimatedMax, bestSet, dayDistance, repeatWorkoutCandidate } from "./metrics.mjs?v=5";
 
@@ -1637,7 +1638,7 @@ function startTimer(seconds) {
   localStorage.setItem(TIMER_KEY, String(timerEnd));
   renderTimer();
 }
-function render() { renderTemplates(); renderWorkouts(); renderFood(); renderTimer(); renderHero(); renderFlow(); renderLive(); renderResult(); renderCalendar(); }
+function render() { renderTemplates(); renderWorkouts(); renderFood(); renderTimer(); renderHero(); renderFlow(); renderLive(); renderResult(); renderCalendar(); renderProgression(); }
 
 function openWorkoutEditor(kind = "session", original = null, date = today(), returnTo = null) {
   workoutEdit = { kind, original: original ? structuredClone(original) : null, returnTo };
@@ -1764,17 +1765,17 @@ function initCalendar() {
 
 function navigate() {
   const requested = location.hash.slice(1);
-  const page = ["overview", "training", "nutrition", "learn", "workout-flow", "workout-live", "workout-result", "workout-record", "calendar"].includes(requested) ? requested : "overview";
+  const page = ["overview", "training", "nutrition", "learn", "workout-flow", "workout-live", "workout-result", "workout-record", "calendar", "progression"].includes(requested) ? requested : "overview";
   if (page === "workout-record" && !workoutEdit) openWorkoutEditor();
   document.querySelectorAll(".page").forEach(node => node.classList.toggle("active", node.id === page));
   document.body.classList.toggle("immersive", ["workout-flow", "workout-live", "workout-result", "workout-record"].includes(page));
   document.body.classList.toggle("workout-navigation", page === "workout-live");
   document.querySelectorAll("[data-page]").forEach(node => {
-    const active = node.dataset.page === (["workout-live", "calendar"].includes(page) ? "training" : page);
+    const active = node.dataset.page === (["workout-live", "calendar", "progression"].includes(page) ? "training" : page);
     node.classList.toggle("active", active);
     if (active) node.setAttribute("aria-current", "page"); else node.removeAttribute("aria-current");
   });
-  document.querySelector("#page-title").textContent = ({ overview: "Обзор", training: "Тренировки", nutrition: "Питание", learn: "База знаний", "workout-flow": "Новая тренировка", "workout-live": "Тренировка", "workout-result": "Результат", "workout-record": "Записать тренировку", calendar: "Календарь" })[page];
+  document.querySelector("#page-title").textContent = ({ overview: "Обзор", training: "Тренировки", nutrition: "Питание", learn: "База знаний", "workout-flow": "Новая тренировка", "workout-live": "Тренировка", "workout-result": "Результат", "workout-record": "Записать тренировку", calendar: "Календарь", progression: "Прогрессия" })[page];
   window.scrollTo(0, 0);
 }
 
@@ -1950,6 +1951,7 @@ document.querySelectorAll("[data-timer-stop]").forEach(button => button.addEvent
   renderTimer();
 }));
 initNutrition({ data, save, render, today, uid });
+initProgression({ data, today });
 window.addEventListener("hashchange", navigate);
 setInterval(() => { renderTimer(); updateLiveDuration(); renderLiveRest(); }, 1000);
 initRecordedWorkout();
