@@ -403,6 +403,7 @@ function exerciseCard(session, exercise) {
   form.addEventListener("submit", event => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(form));
+    exercise.completed = false;
     exercise.sets.push({ id: uid(), weight: isRun(session) ? 0 : number(values.weight), reps: number(values.reps), note: values.note || "", createdAt: Date.now() });
     save(); render();
     if (autoRest && !isRun(session)) startTimer(restSeconds);
@@ -1396,18 +1397,78 @@ function liveCommentControl(exercise, set = null, preview = null) {
   return control;
 }
 
+function initLiveExerciseReordering() {
+  const nav = document.querySelector("#live-exercise-nav");
+  let gesture = null, suppressUntil = 0;
+  function moveHeldTab() {
+    if (!gesture?.dragging) return;
+    const x = gesture.x, bounds = nav.getBoundingClientRect();
+    if (x < bounds.left + 35) nav.scrollLeft -= 12;
+    if (x > bounds.right - 35) nav.scrollLeft += 12;
+    const tabs = [...nav.querySelectorAll(".live-exercise-tab")].filter(tab => tab !== gesture.tab);
+    const before = tabs.find(tab => x < tab.getBoundingClientRect().left + tab.getBoundingClientRect().width / 2);
+    nav.insertBefore(gesture.tab, before || null);
+  }
+  nav.addEventListener("click", event => { if (Date.now() < suppressUntil) { event.preventDefault(); event.stopImmediatePropagation(); } }, true);
+  nav.addEventListener("pointerdown", event => {
+    const tab = event.target.closest(".live-exercise-tab");
+    if (!tab || event.button !== 0) return;
+    const session = liveSession(); if (!session) return;
+    gesture = { tab, session, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, scrollLeft: nav.scrollLeft, x: event.clientX, dragging: false, panning: false };
+    gesture.timer = setTimeout(() => { if (!gesture || gesture.panning) return; gesture.dragging = true; nav.setPointerCapture(gesture.pointerId); tab.classList.add("reordering"); nav.classList.add("reordering"); gesture.edgeTimer = setInterval(moveHeldTab, 50); }, 450);
+  });
+  nav.addEventListener("pointermove", event => {
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    const dx = event.clientX - gesture.startX, dy = event.clientY - gesture.startY;
+    if (!gesture.dragging) {
+      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) { clearTimeout(gesture.timer); gesture.panning = true; nav.setPointerCapture(gesture.pointerId); suppressUntil = Date.now() + 600; }
+      if (gesture.panning) { nav.scrollLeft = gesture.scrollLeft - dx; if (Math.abs(dy) > Math.abs(dx)) window.scrollBy(0, -dy / 8); }
+      return;
+    }
+    event.preventDefault(); suppressUntil = Date.now() + 600;
+    gesture.x = event.clientX; moveHeldTab();
+  });
+  function end(event, cancelled = false) {
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    clearTimeout(gesture.timer); clearInterval(gesture.edgeTimer);
+    const current = gesture; gesture = null;
+    current.tab.classList.remove("reordering"); nav.classList.remove("reordering");
+    if (!current.dragging) return;
+    suppressUntil = Date.now() + 600;
+    const scroll = nav.scrollLeft;
+    if (!cancelled) {
+      const entries = new Map(current.session.exercises.map(exercise => [exercise.id, exercise]));
+      current.session.exercises = [...nav.children].map(tab => entries.get(tab.dataset.exerciseId)).filter(Boolean);
+      save();
+    }
+    renderLive(); nav.scrollLeft = scroll;
+  }
+  nav.addEventListener("pointerup", event => end(event));
+  nav.addEventListener("pointercancel", event => end(event, true));
+  nav.addEventListener("keydown", event => {
+    if (!event.altKey || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    const tab = event.target.closest(".live-exercise-tab"), session = liveSession(); if (!tab || !session) return;
+    const index = session.exercises.findIndex(exercise => exercise.id === tab.dataset.exerciseId);
+    const destination = index + (event.key === "ArrowLeft" ? -1 : 1);
+    if (destination < 0 || destination >= session.exercises.length) return;
+    event.preventDefault(); [session.exercises[index], session.exercises[destination]] = [session.exercises[destination], session.exercises[index]];
+    save(); renderLive(); nav.querySelector(`[data-exercise-id="${tab.dataset.exerciseId}"]`)?.focus();
+  });
+}
 function renderLive() {
   const session = liveSession();
   const target = document.querySelector("#live-content");
   const nav = document.querySelector("#live-exercise-nav");
   target.replaceChildren(); nav.replaceChildren();
+  document.querySelector("#live-finish").hidden = !session;
   if (!session) { target.append(element("p", "empty-state", "Активной тренировки нет.")); return; }
   document.querySelector("#live-title").textContent = session.title;
   updateLiveDuration();
   if (!session.exercises.some(exercise => exercise.id === session.currentExerciseId)) session.currentExerciseId = session.exercises[0]?.id;
   for (const [index, exercise] of session.exercises.entries()) {
     const button = element("button", `live-exercise-tab${session.currentExerciseId === exercise.id ? " active" : ""}`, `${index + 1}. ${exercise.name}`);
-    button.type = "button";
+    button.type = "button"; button.dataset.exerciseId = exercise.id;
+    button.title = "Удерживай и перетаскивай для изменения порядка. С клавиатуры: Alt + стрелка влево/вправо.";
     button.append(element("small", "", exercise.completed ? "Завершено" : `${exercise.sets.length}/${exercise.plannedSets || 3}`));
     button.addEventListener("click", () => { if (liveRest) skipLiveRest(); session.currentExerciseId = exercise.id; save(); renderLive(); });
     nav.append(button);
@@ -1487,6 +1548,7 @@ function renderLive() {
   form.addEventListener("submit", event => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(form));
+    exercise.completed = false;
     exercise.sets.push({ id: uid(), weight: isRun(session) ? 0 : number(values.weight), reps: number(values.reps), note: values.note || "", comment: exercise.pendingSetComment || "", createdAt: Date.now() });
     delete exercise.pendingSetComment;
     save(); render(); startLiveRest(session);
@@ -1497,20 +1559,14 @@ function renderLive() {
   const actions = element("div", "live-exercise-actions");
   actions.append(element("p", "live-previous", next
     ? `Все подходы сделаны? Дальше: ${next.name}.`
-    : "Все подходы сделаны? Заверши тренировку и посмотри результат."));
-  const button = element("button", "live-next", next
-    ? "Завершить и перейти к следующему"
-    : "Завершить упражнение и тренировку");
+    : "Заверши упражнение. Можно добавить ещё одно или отдельно закончить тренировку."));
+  const button = element("button", "live-next", exercise.completed ? "Упражнение завершено" : "Завершить упражнение");
+  button.disabled = Boolean(exercise.completed);
   button.type = "button";
   button.addEventListener("click", () => {
-    if (!next) {
-      document.querySelector("#live-confirm").hidden = false;
-      document.querySelector("#live-confirm-cancel").focus();
-      return;
-    }
     exercise.completed = true;
     if (liveRest) skipLiveRest();
-    session.currentExerciseId = next.id;
+    if (next) session.currentExerciseId = next.id;
     save(); renderLive();
     window.scrollTo(0, 0);
   });
@@ -1872,6 +1928,7 @@ document.querySelector("#training-start").addEventListener("click", () => openFl
 document.querySelector("#flow-next").addEventListener("click", flowNext);
 document.querySelector("#flow-back").addEventListener("click", () => { if (flowDraft.step === 1) location.hash = "#overview"; else { flowDraft.step--; renderFlow(); window.scrollTo(0, 0); } });
 document.querySelector("#flow-close").addEventListener("click", () => location.hash = "#overview");
+initLiveExerciseReordering();
 document.querySelector("#live-finish").addEventListener("click", () => { document.querySelector("#live-confirm").hidden = false; document.querySelector("#live-confirm-cancel").focus(); });
 document.querySelector("#live-confirm-cancel").addEventListener("click", () => document.querySelector("#live-confirm").hidden = true);
 document.querySelector("#live-confirm-yes").addEventListener("click", finishLiveWorkout);
