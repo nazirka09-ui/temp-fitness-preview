@@ -1496,7 +1496,6 @@ function renderLive() {
   const previous = history.at(-1);
   const prior = previous ? bestSet(previous.sets) : null;
   const goal = suggestedGoal(history);
-  if (prior) target.append(element("p", "live-previous", `Прошлый раз: ${setText(prior, isRun(session))}`));
   const pastSets = element("details", "live-past-sets");
   const pastSummary = element("summary", "", "Прошлые подходы");
   pastSets.append(pastSummary);
