@@ -1576,9 +1576,6 @@ function renderLive() {
   });
   target.append(form);
   const actions = element("div", "live-exercise-actions");
-  actions.append(element("p", "live-previous", next
-    ? `Все подходы сделаны? Дальше: ${next.name}.`
-    : "Заверши упражнение. Можно добавить ещё одно или отдельно закончить тренировку."));
   const button = element("button", "live-next", exercise.completed ? "Упражнение завершено" : "Завершить упражнение");
   button.disabled = Boolean(exercise.completed);
   button.type = "button";
