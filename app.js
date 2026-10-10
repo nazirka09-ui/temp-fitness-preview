@@ -1021,14 +1021,27 @@ function liveAddExerciseForm(session) {
   return form;
 }
 function removeLiveExercise(session, exercise) {
-  if (exercise.sets.length && !confirm(`Убрать «${exercise.name}» и записанные для него подходы из этой тренировки?`)) return;
-  const index = session.exercises.indexOf(exercise);
-  session.exercises = session.exercises.filter(entry => entry.id !== exercise.id);
-  if (session.currentExerciseId === exercise.id) {
-    if (liveRest) skipLiveRest();
-    session.currentExerciseId = session.exercises[Math.min(index, session.exercises.length - 1)]?.id;
-  }
-  save(); renderLive();
+  let dialog = document.querySelector("#live-remove-confirm");
+  if (!dialog) { dialog = element("dialog", "live-remove-confirm"); dialog.id = "live-remove-confirm"; document.body.append(dialog); }
+  dialog.replaceChildren();
+  const title = element("h3", "", "Вы действительно хотите убрать упражнение?");
+  title.id = "live-remove-confirm-title"; dialog.setAttribute("aria-labelledby", title.id);
+  dialog.append(title, element("p", "form-help", exercise.name));
+  if (exercise.sets.length) dialog.append(element("p", "form-help", "Записанные подходы этого упражнения тоже будут удалены."));
+  const actions = element("div", "live-remove-confirm-actions");
+  const no = element("button", "small-button", "Нет"); no.type = "button"; no.addEventListener("click", () => dialog.close());
+  const yes = element("button", "small-button danger", "Да"); yes.type = "button";
+  yes.addEventListener("click", () => {
+    dialog.close();
+    const index = session.exercises.indexOf(exercise);
+    session.exercises = session.exercises.filter(entry => entry.id !== exercise.id);
+    if (session.currentExerciseId === exercise.id) {
+      if (liveRest) skipLiveRest();
+      session.currentExerciseId = session.exercises[Math.min(index, session.exercises.length - 1)]?.id;
+    }
+    save(); renderLive();
+  });
+  actions.append(no, yes); dialog.append(actions); dialog.showModal(); no.focus();
 }
 
 function addRecordedSet(card, source = null) {
@@ -1413,7 +1426,7 @@ function initLiveExerciseReordering() {
   nav.addEventListener("click", event => { if (Date.now() < suppressUntil) { event.preventDefault(); event.stopImmediatePropagation(); } }, true);
   nav.addEventListener("pointerdown", event => {
     const tab = event.target.closest(".live-exercise-tab");
-    if (!tab || event.button !== 0) return;
+    if (!tab || event.button !== 0 || event.target.closest(".live-tab-remove")) return;
     const session = liveSession(); if (!session) return;
     gesture = { tab, session, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, scrollLeft: nav.scrollLeft, x: event.clientX, dragging: false, panning: false };
     gesture.timer = setTimeout(() => { if (!gesture || gesture.panning) return; gesture.dragging = true; nav.setPointerCapture(gesture.pointerId); tab.classList.add("reordering"); nav.classList.add("reordering"); gesture.edgeTimer = setInterval(moveHeldTab, 50); }, 450);
@@ -1466,13 +1479,18 @@ function renderLive() {
   document.querySelector("#live-title").textContent = session.title;
   updateLiveDuration();
   if (!session.exercises.some(exercise => exercise.id === session.currentExerciseId)) session.currentExerciseId = session.exercises[0]?.id;
+  document.querySelector(".live-reorder-hint").hidden = localStorage.getItem("temp-reorder-hint-dismissed-v1") === "1";
   for (const [index, exercise] of session.exercises.entries()) {
-    const button = element("button", `live-exercise-tab${session.currentExerciseId === exercise.id ? " active" : ""}`, `${index + 1}. ${exercise.name}`);
-    button.type = "button"; button.dataset.exerciseId = exercise.id;
-    button.title = "Удерживай и перетаскивай для изменения порядка. С клавиатуры: Alt + стрелка влево/вправо.";
-    button.append(element("small", "", exercise.completed ? "Завершено" : `${exercise.sets.length}/${exercise.plannedSets || 3}`));
-    button.addEventListener("click", () => { if (liveRest) skipLiveRest(); session.currentExerciseId = exercise.id; save(); renderLive(); });
-    nav.append(button);
+    const card = element("div", `live-exercise-tab${session.currentExerciseId === exercise.id ? " active" : ""}`);
+    card.dataset.exerciseId = exercise.id; card.tabIndex = 0;
+    card.title = "Удерживай и перетаскивай для изменения порядка. С клавиатуры: Alt + стрелка влево/вправо.";
+    const select = element("button", "live-tab-select", `${index + 1}. ${exercise.name}`); select.type = "button";
+    select.append(element("small", "", exercise.completed ? "Завершено" : `${exercise.sets.length}/${exercise.plannedSets || 3}`));
+    select.addEventListener("click", () => { if (liveRest) skipLiveRest(); session.currentExerciseId = exercise.id; save(); renderLive(); });
+    const remove = element("button", "live-tab-remove", "×"); remove.type = "button";
+    remove.setAttribute("aria-label", `Убрать упражнение: ${exercise.name}`); remove.title = "Убрать упражнение";
+    remove.addEventListener("click", () => removeLiveExercise(session, exercise));
+    card.append(select, remove); nav.append(card);
   }
   const editor = element("details", "live-exercise-editor");
   const editorTitle = element("summary", "", "Добавить упражнение");
@@ -1486,9 +1504,6 @@ function renderLive() {
   }
   const currentIndex = session.exercises.indexOf(exercise);
   target.append(element("div", "eyebrow", `УПРАЖНЕНИЕ ${currentIndex + 1} ИЗ ${session.exercises.length}`), element("h3", "live-exercise-title", exercise.name));
-  const remove = element("button", "text-button danger live-remove-exercise", "Убрать упражнение");
-  remove.type = "button"; remove.addEventListener("click", () => removeLiveExercise(session, exercise));
-  target.append(remove);
   const exerciseComment = element("p", "workout-comment live-exercise-comment", exercise.comment || "");
   exerciseComment.id = "live-exercise-comment"; exerciseComment.hidden = !exercise.comment;
   target.append(exerciseComment);
@@ -1965,6 +1980,7 @@ document.querySelectorAll("[data-timer-stop]").forEach(button => button.addEvent
   localStorage.removeItem(TIMER_KEY);
   renderTimer();
 }));
+document.querySelector("#live-reorder-dismiss").addEventListener("click", () => { localStorage.setItem("temp-reorder-hint-dismissed-v1", "1"); document.querySelector(".live-reorder-hint").hidden = true; });
 initNutrition({ data, save, render, today, uid });
 initProgression({ data, today });
 window.addEventListener("hashchange", navigate);
