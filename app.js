@@ -1528,7 +1528,9 @@ function renderLive() {
   const rest = element("div", "live-rest"); rest.id = "live-rest";
   const count = exercise.sets.length;
   const totalSets = Math.max(exercise.plannedSets || 3, count);
-  const nextExercise = count >= totalSets ? session.exercises[session.exercises.indexOf(exercise) + 1] : null;
+  const next = session.exercises.slice(currentIndex + 1).find(item => !item.completed)
+    || session.exercises.find(item => item.id !== exercise.id && !item.completed);
+  const nextExercise = count >= totalSets ? next : null;
   rest.innerHTML = `<div class="rest-dial"><svg class="rest-ring" viewBox="0 0 320 320" aria-hidden="true"><circle class="rest-outer" cx="160" cy="160" r="151"/><circle class="rest-track" cx="160" cy="160" r="137"/><circle class="rest-progress" cx="160" cy="160" r="137" pathLength="100"/><circle class="rest-inner" cx="160" cy="160" r="120"/></svg><div class="rest-dial-content"><div class="eyebrow">ОТДЫХ</div><div class="rest-set-caption">ПОСЛЕ ПОДХОДА ${count}</div><div class="live-rest-time" data-rest-time role="timer">01:30</div><div class="rest-total" data-rest-total>из 2:00</div></div></div><div class="rest-next"><span class="rest-next-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M7 7v10M17 7v10M3 10v4M21 10v4M7 12h10"/></svg></span><div><span class="eyebrow">${nextExercise ? "СЛЕДУЮЩЕЕ УПРАЖНЕНИЕ" : count >= totalSets ? "ПОСЛЕ ОТДЫХА" : "СЛЕДУЮЩИЙ ПОДХОД"}</span><strong data-rest-next></strong></div></div><div class="live-rest-actions"><button type="button" data-rest-skip><span class="rest-control-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 5 9 7-9 7Zm10 0 9 7-9 7Z"/></svg></span><span class="rest-control-label">Пропустить</span></button><button type="button" data-rest-pause><span class="rest-control-icon"></span><span class="rest-control-label">Пауза</span></button><button type="button" data-rest-add><span class="rest-control-icon rest-plus">+30</span><span class="rest-control-label">+30 сек</span></button></div><div class="rest-sets"><div><span class="eyebrow">ПОДХОДЫ</span><div class="rest-set-chips"></div></div><div class="rest-set-summary"><strong>${count} / ${totalSets}</strong><span>ЗАВЕРШЕНО</span></div></div>`;
   rest.querySelector("[data-rest-next]").textContent = nextExercise?.name || (count >= totalSets ? "Завершить упражнение" : exercise.name);
   for (let i = 0; i < totalSets; i++) rest.querySelector(".rest-set-chips").append(element("span", i < count ? "done" : i === count ? "next" : "", i < count ? "✓" : String(i + 1)));
@@ -1573,8 +1575,6 @@ function renderLive() {
     save(); render(); startLiveRest(session);
   });
   target.append(form);
-  const next = session.exercises.slice(currentIndex + 1).find(item => !item.completed)
-    || session.exercises.find(item => item.id !== exercise.id && !item.completed);
   const actions = element("div", "live-exercise-actions");
   actions.append(element("p", "live-previous", next
     ? `Все подходы сделаны? Дальше: ${next.name}.`
@@ -1590,7 +1590,7 @@ function renderLive() {
     window.scrollTo(0, 0);
   });
   actions.append(button);
-  target.insertBefore(actions, rest);
+  target.append(actions);
   renderLiveRest();
 }
 function finishLiveWorkout() {
