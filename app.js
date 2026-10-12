@@ -1002,7 +1002,7 @@ function addLiveRestTime() {
   liveRest.total = total + 30;
   persistLiveRest(); renderLiveRest();
 }
-function liveAddExerciseForm(session) {
+function liveAddExerciseForm(session, onAdded = () => {}) {
   const form = element("form", "flow-exercise-form");
   const picker = exercisePicker(focusGroup(session), null, "name", session.exercises.map(entry => entry.name));
   const submit = element("button", "small-button", "Добавить"); submit.type = "submit";
@@ -1016,7 +1016,7 @@ function liveAddExerciseForm(session) {
     const entry = { id: uid(), name, group: picker.group.value, plannedSets: 3, sets: [] };
     if (liveRest) skipLiveRest();
     session.exercises.push(entry); session.currentExerciseId = entry.id;
-    save(); render();
+    onAdded(); save(); render();
   });
   return form;
 }
@@ -1421,7 +1421,7 @@ function initLiveExerciseReordering() {
     if (x > bounds.right - 35) nav.scrollLeft += 12;
     const tabs = [...nav.querySelectorAll(".live-exercise-tab")].filter(tab => tab !== gesture.tab);
     const before = tabs.find(tab => x < tab.getBoundingClientRect().left + tab.getBoundingClientRect().width / 2);
-    nav.insertBefore(gesture.tab, before || null);
+    nav.insertBefore(gesture.tab, before || nav.querySelector(".live-add-tab"));
   }
   nav.addEventListener("click", event => { if (Date.now() < suppressUntil) { event.preventDefault(); event.stopImmediatePropagation(); } }, true);
   nav.addEventListener("pointerdown", event => {
@@ -1492,16 +1492,20 @@ function renderLive() {
     remove.addEventListener("click", () => removeLiveExercise(session, exercise));
     card.append(select, remove); nav.append(card);
   }
-  const editor = element("details", "live-exercise-editor");
-  const editorTitle = element("summary", "", "Добавить упражнение");
-  editor.append(editorTitle, liveAddExerciseForm(session));
-  target.append(editor);
+  const add = element("button", "live-add-tab", "Добавить упражнение"); add.type = "button";
+  add.addEventListener("click", () => {
+    let dialog = document.querySelector("#live-add-dialog");
+    if (!dialog) { dialog = element("dialog", "live-remove-confirm live-add-dialog"); dialog.id = "live-add-dialog"; document.body.append(dialog); }
+    dialog.replaceChildren();
+    const header = element("div", "live-add-header");
+    const title = element("h3", "", "Добавить упражнение"); title.id = "live-add-title";
+    const close = element("button", "live-add-close", "×"); close.type = "button"; close.setAttribute("aria-label", "Закрыть"); close.addEventListener("click", () => dialog.close());
+    header.append(title, close); dialog.setAttribute("aria-labelledby", title.id);
+    dialog.append(header, liveAddExerciseForm(session, () => dialog.close())); dialog.showModal();
+  });
+  nav.append(add);
   const exercise = session.exercises.find(item => item.id === session.currentExerciseId);
-  if (!exercise) {
-    target.append(element("p", "empty-state", "Добавь первое упражнение, чтобы начать запись подходов."));
-    editor.open = true;
-    return;
-  }
+  if (!exercise) return;
   const currentIndex = session.exercises.indexOf(exercise);
   target.append(element("div", "eyebrow", `УПРАЖНЕНИЕ ${currentIndex + 1} ИЗ ${session.exercises.length}`), element("h3", "live-exercise-title", exercise.name));
   const exerciseComment = element("p", "workout-comment live-exercise-comment", exercise.comment || "");
@@ -1530,7 +1534,6 @@ function renderLive() {
     pastSets.append(element("p", "form-help", "Пока нет выполненных тренировок с этим упражнением."));
   }
   target.append(pastSets);
-  if (goal && prior?.weight > 0 && !isRun(session)) target.append(element("p", "live-goal", `Ориентир сегодня: ${goalLabel(goal)}. Можно изменить.`));
   const completed = element("div", "live-completed");
   exercise.sets.forEach((set, index) => {
     const row = element("div", "live-set-done");
