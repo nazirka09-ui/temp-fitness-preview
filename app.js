@@ -1530,14 +1530,12 @@ function pastSetsPanel(session, exercise, history) {
   };
   older.addEventListener("click", event => shift(event, -1));
   newer.addEventListener("click", event => shift(event, 1));
-  for (const arrow of [older, newer]) arrow.addEventListener("pointerdown", event => event.stopPropagation());
-  summary.append(nav);
   pastSets.addEventListener("toggle", () => {
     if (pastSets.open) pastSetsOpen.add(exercise.id);
     else pastSetsOpen.delete(exercise.id);
   });
   paint();
-  pastSets.append(body);
+  pastSets.append(nav, body);
   if (pastSetsOpen.has(exercise.id)) pastSets.open = true;
   return pastSets;
 }
@@ -2045,4 +2043,4 @@ setInterval(() => { renderTimer(); updateLiveDuration(); renderLiveRest(); }, 10
 initRecordedWorkout();
 initCalendar();
 render(); navigate();
-if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("./sw.js").catch(() => {});
+if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(() => {});
