@@ -1,5 +1,5 @@
-const CACHE = "temp-app-v42";
-const FILES = ["./", "./index.html", "./styles.css?v=42", "./app.js?v=41", "./metrics.mjs?v=5", "./progression.mjs?v=1", "./nutrition.mjs?v=1", "./food-catalog.mjs?v=1", "./icon.svg", "./manifest.webmanifest"];
+const CACHE = "temp-app-v43";
+const FILES = ["./", "./index.html", "./styles.css?v=43", "./app.js?v=43", "./metrics.mjs?v=5", "./progression.mjs?v=1", "./nutrition.mjs?v=1", "./food-catalog.mjs?v=1", "./icon.svg", "./manifest.webmanifest"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)).then(() => self.skipWaiting()));
 });

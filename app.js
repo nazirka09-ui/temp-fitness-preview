@@ -2105,6 +2105,27 @@ document.querySelectorAll("[data-timer-stop]").forEach(button => button.addEvent
 document.querySelector("#live-reorder-dismiss").addEventListener("click", () => { localStorage.setItem("temp-reorder-hint-dismissed-v1", "1"); document.querySelector(".live-reorder-hint").hidden = true; });
 initNutrition({ data, save, render, today, uid });
 initProgression({ data, today });
+function pinMobileNav() {
+  const nav = document.querySelector(".mobile-nav");
+  if (!nav) return;
+  const root = document.documentElement;
+  if (getComputedStyle(nav).position !== "fixed") { root.style.setProperty("--nav-shift", "0px"); return; }
+  const viewport = window.visualViewport;
+  root.style.setProperty("--nav-shift", "0px");
+  const rect = nav.getBoundingClientRect();
+  const layoutBottom = (viewport ? window.innerHeight - viewport.offsetTop : window.innerHeight) - 10;
+  const delta = Math.round(layoutBottom - rect.bottom);
+  root.style.setProperty("--nav-shift", `${Math.abs(delta) > 1 ? delta : 0}px`);
+}
+let navPinFrame = 0;
+function schedulePinNav() { cancelAnimationFrame(navPinFrame); navPinFrame = requestAnimationFrame(pinMobileNav); }
+window.visualViewport?.addEventListener("resize", schedulePinNav);
+window.visualViewport?.addEventListener("scroll", schedulePinNav);
+window.addEventListener("resize", schedulePinNav);
+window.addEventListener("orientationchange", schedulePinNav);
+window.addEventListener("focusin", () => { schedulePinNav(); setTimeout(pinMobileNav, 350); });
+window.addEventListener("focusout", () => { schedulePinNav(); setTimeout(pinMobileNav, 350); });
+schedulePinNav();
 window.addEventListener("hashchange", navigate);
 setInterval(() => { renderTimer(); updateLiveDuration(); renderLiveRest(); }, 1000);
 initRecordedWorkout();
