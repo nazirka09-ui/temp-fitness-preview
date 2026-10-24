@@ -1096,6 +1096,7 @@ function updateRecordedFields() {
     }
     card.querySelector(".record-add-set").textContent = running ? "Добавить отрезок" : "Добавить подход";
   });
+  saveRecordDraft();
 }
 function addRecordedExercise(source = null) {
   const card = element("section", "panel record-exercise");
@@ -1155,6 +1156,45 @@ function recordSelection(entry, checked, targets = null) {
   if (card) return;
   addRecordedExercise({ name: entry.name, group: entry.group, sets: targets?.length ? targets.map(set => ({ weight: set.weight ?? "", reps: set.reps || "" })) : Array.from({ length: 3 }, () => ({ weight: "", reps: "" })) });
 }
+const RECORD_DRAFT_KEY = "temp-record-draft-v1";
+let suppressRecordDraft = false;
+function recordDraftHasProgress(draft) {
+  if (!draft) return false;
+  if ((draft.step || 1) > 1 || draft.groups?.length) return true;
+  if ((draft.title || "").trim() && draft.title !== draft.autoTitle) return true;
+  return (draft.exercises || []).some(exercise => (exercise.name || "").trim() || (exercise.sets || []).some(set => String(set.weight ?? "").trim() || String(set.reps ?? "").trim() || set.note));
+}
+function readRecordDraft() {
+  try {
+    const draft = JSON.parse(localStorage.getItem(RECORD_DRAFT_KEY) || "null");
+    return draft && typeof draft === "object" ? draft : null;
+  } catch { return null; }
+}
+function recordDraftPayload() {
+  const form = document.querySelector("#record-workout-form");
+  return {
+    step: recordWizard.step, groups: recordWizard.groups, autoTitle: recordWizard.autoTitle || "",
+    title: form.elements.title.value, date: form.elements.date.value, activity: form.elements.activity.value, duration: form.elements.duration.value,
+    exercises: recordCards().map(card => ({
+      name: card.querySelector('[name="exerciseName"]').value,
+      group: card.querySelector('[name="group"]').value,
+      sets: [...card.querySelectorAll(".record-set-row")].map(row => ({
+        weight: row.querySelector('[name="weight"]').value,
+        reps: row.querySelector('[name="reps"]').value,
+        note: row.querySelector('[name="note"]').value,
+      })),
+    })),
+  };
+}
+function saveRecordDraft() {
+  if (suppressRecordDraft || !recordWizard || workoutEdit?.original || workoutEdit?.kind === "plan") return;
+  try {
+    const payload = recordDraftPayload();
+    if (!recordDraftHasProgress(payload)) localStorage.removeItem(RECORD_DRAFT_KEY);
+    else localStorage.setItem(RECORD_DRAFT_KEY, JSON.stringify(payload));
+  } catch {}
+}
+function clearRecordDraft() { try { localStorage.removeItem(RECORD_DRAFT_KEY); } catch {} }
 function renderRecordWizard() {
   const target = document.querySelector("#record-wizard");
   const form = document.querySelector("#record-workout-form");
@@ -1163,6 +1203,13 @@ function renderRecordWizard() {
   for (const node of [form.querySelector(".record-details"), document.querySelector("#record-exercises"), document.querySelector("#record-add-exercise"), document.querySelector(".record-save")]) node.hidden = !final;
   document.querySelector("#record-extra-details").open = !recordWizard;
   if (!recordWizard) return;
+  if (workoutEdit?.resumed) {
+    const bar = element("div", "record-draft-bar");
+    bar.append(element("p", "form-help", "Продолжаем несохранённую запись."));
+    const restart = element("button", "text-button", "Начать заново"); restart.type = "button";
+    restart.addEventListener("click", () => { clearRecordDraft(); openWorkoutEditor("session", null, today(), workoutEdit?.returnTo || null); });
+    bar.append(restart); target.append(bar);
+  }
   const step = recordWizard.step;
   target.append(element("div", "eyebrow record-step", `ШАГ ${step} / 3`));
   document.querySelector("#workout-record .flow-title").textContent = step === 1 ? "Что тренировали?" : step === 2 ? "Какие упражнения выполняли?" : "Сколько сделали?";
@@ -1178,7 +1225,7 @@ function renderRecordWizard() {
       const checkbox = element("input"); checkbox.type = "checkbox"; checkbox.checked = recordWizard.groups.includes(group);
       checkbox.addEventListener("change", () => {
         recordWizard.groups = checkbox.checked ? [...recordWizard.groups, group] : recordWizard.groups.filter(value => value !== group);
-        updateRecordWizardNext();
+        updateRecordWizardNext(); saveRecordDraft();
       });
       label.append(checkbox, element("span", "", group)); grid.append(label);
     }
@@ -1224,6 +1271,7 @@ function renderRecordWizard() {
       recordWizard.step++; renderRecordWizard(); window.scrollTo(0, 0);
     }); target.append(next); updateRecordWizardNext();
   }
+  saveRecordDraft();
 }
 function updateRecordWizardNext() {
   const next = document.querySelector(".record-wizard-next");
@@ -1241,6 +1289,9 @@ function initRecordedWorkout() {
   }
   addRecordedExercise();
   form.elements.activity.addEventListener("change", updateRecordedFields);
+  form.addEventListener("input", saveRecordDraft);
+  form.addEventListener("change", saveRecordDraft);
+  window.addEventListener("pagehide", saveRecordDraft);
   form.elements.title.addEventListener("input", () => form.elements.title.setCustomValidity(form.elements.title.value.trim() ? "" : "Укажи название тренировки."));
   document.querySelector("#record-add-exercise").addEventListener("click", () => {
     const card = addRecordedExercise(); card.querySelector('[name="exerciseChoice"]').focus();
@@ -1292,9 +1343,12 @@ function initRecordedWorkout() {
     calendarMonth = date.getMonth(); calendarYear = date.getFullYear();
     const destination = workoutEdit?.returnTo || (kind === "plan" ? "#calendar" : "#workout-result");
     if (kind !== "plan") resultSessionId = session.id;
+    if (recordWizard) clearRecordDraft();
+    suppressRecordDraft = true;
     workoutEdit = null; recordWizard = null; renderRecordWizard();
     form.reset(); form.elements.date.value = today();
     document.querySelector("#record-exercises").replaceChildren(); addRecordedExercise();
+    suppressRecordDraft = false;
     render(); location.hash = destination;
   });
 }
@@ -1726,15 +1780,18 @@ function startTimer(seconds) {
 function render() { renderTemplates(); renderWorkouts(); renderFood(); renderTimer(); renderHero(); renderFlow(); renderLive(); renderResult(); renderCalendar(); renderProgression(); }
 
 function openWorkoutEditor(kind = "session", original = null, date = today(), returnTo = null) {
-  workoutEdit = { kind, original: original ? structuredClone(original) : null, returnTo };
-  recordWizard = kind === "session" && !original ? { step: 1, groups: [], autoTitle: "" } : null;
+  suppressRecordDraft = true;
+  const draft = kind === "session" && !original ? readRecordDraft() : null;
+  const resume = Boolean(draft && recordDraftHasProgress(draft));
+  workoutEdit = { kind, original: original ? structuredClone(original) : null, returnTo, resumed: resume };
+  recordWizard = kind === "session" && !original ? { step: resume ? Math.min(3, Number(draft.step) || 1) : 1, groups: resume ? draft.groups || [] : [], autoTitle: resume ? draft.autoTitle || "" : "" } : null;
   const form = document.querySelector("#record-workout-form");
   form.reset(); form.elements.title.setCustomValidity("");
   form.elements.date.removeAttribute("max");
-  form.elements.title.value = original?.title || "";
-  form.elements.date.value = original?.date || date;
-  form.elements.activity.value = original?.activity || "Силовая";
-  form.elements.duration.value = original?.completedAt && original?.startedAt ? Math.max(1, Math.round((original.completedAt - original.startedAt) / 60000)) : "";
+  form.elements.title.value = resume ? draft.title || "" : original?.title || "";
+  form.elements.date.value = resume ? draft.date || date : original?.date || date;
+  form.elements.activity.value = resume ? draft.activity || "Силовая" : original?.activity || "Силовая";
+  form.elements.duration.value = resume ? draft.duration || "" : original?.completedAt && original?.startedAt ? Math.max(1, Math.round((original.completedAt - original.startedAt) / 60000)) : "";
   form.elements.duration.parentElement.hidden = original?.status === "active";
   document.querySelector("#workout-record .flow-title").textContent = original ? "Изменить тренировку" : kind === "plan" ? "Запланировать тренировку" : "Записать тренировку";
   document.querySelector("#workout-record .flow-subtitle").textContent = kind === "plan"
@@ -1743,10 +1800,13 @@ function openWorkoutEditor(kind = "session", original = null, date = today(), re
   document.querySelector(".record-save").textContent = original ? "Сохранить изменения" : kind === "plan" ? "Сохранить план" : "Сохранить тренировку";
   document.querySelector(".record-back").href = returnTo || (kind === "plan" ? "#calendar" : "#overview");
   document.querySelector("#record-exercises").replaceChildren();
-  if (original?.exercises.length) original.exercises.forEach(exercise => addRecordedExercise(exercise));
+  if (resume && draft.exercises?.length) draft.exercises.forEach(exercise => addRecordedExercise({ name: exercise.name || "", group: exercise.group || "Другое", sets: (exercise.sets || []).map(set => ({ weight: set.weight ?? "", reps: set.reps ?? "", note: set.note || "" })) }));
+  else if (original?.exercises.length) original.exercises.forEach(exercise => addRecordedExercise(exercise));
   else if (kind !== "plan" && !recordWizard) addRecordedExercise();
   renderRecordWizard();
   updateRecordedFields();
+  suppressRecordDraft = false;
+  saveRecordDraft();
   location.hash = "#workout-record";
 }
 function availablePlans() { return data.plans.filter(plan => !data.sessions.some(session => session.planId === plan.id)); }
