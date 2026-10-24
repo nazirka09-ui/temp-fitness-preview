@@ -960,7 +960,7 @@ function persistLiveRest() {
 }
 function clearLiveRest() { liveRest = null; persistLiveRest(); }
 function startLiveRest(session) {
-  liveRest = { sessionId: session.id, endAt: Date.now() + liveRestSeconds * 1000, remaining: liveRestSeconds, total: liveRestSeconds, paused: false };
+  liveRest = { sessionId: session.id, exerciseId: session.currentExerciseId, endAt: Date.now() + liveRestSeconds * 1000, remaining: liveRestSeconds, total: liveRestSeconds, paused: false };
   persistLiveRest();
   startTimer(liveRestSeconds);
   renderLiveRest();
@@ -969,13 +969,20 @@ function liveRestRemaining() {
   if (!liveRest || liveRest.sessionId !== liveSession()?.id) return 0;
   return liveRest.paused ? liveRest.remaining : Math.max(0, Math.ceil((liveRest.endAt - Date.now()) / 1000));
 }
+function liveRestVisible() {
+  const session = liveSession();
+  if (!liveRest || !session || liveRest.sessionId !== session.id) return false;
+  if (liveRest.exerciseId && !session.exercises.some(exercise => exercise.id === liveRest.exerciseId)) return false;
+  return !liveRest.exerciseId || liveRest.exerciseId === session.currentExerciseId;
+}
 function renderLiveRest() {
   const rest = document.querySelector("#live-rest");
   const form = document.querySelector("#live-set-form");
   if (!rest || !form) return;
   const seconds = liveRestRemaining();
   if (liveRest && !liveRest.paused && seconds === 0) clearLiveRest();
-  const active = Boolean(liveRest && liveRest.sessionId === liveSession()?.id);
+  if (liveRest?.exerciseId && liveSession() && !liveSession().exercises.some(exercise => exercise.id === liveRest.exerciseId)) clearLiveRest();
+  const active = liveRestVisible();
   rest.hidden = !active;
   form.hidden = active;
   if (!active) return;
@@ -1610,7 +1617,7 @@ function renderLive() {
     card.title = "Удерживай и перетаскивай для изменения порядка. С клавиатуры: Alt + стрелка влево/вправо.";
     const select = element("button", "live-tab-select", `${index + 1}. ${exercise.name}`); select.type = "button";
     select.append(element("small", "", exercise.completed ? "Завершено" : `${exercise.sets.length}/${exercise.plannedSets || 3}`));
-    select.addEventListener("click", () => { if (liveRest) skipLiveRest(); session.currentExerciseId = exercise.id; save(); renderLive(); });
+    select.addEventListener("click", () => { session.currentExerciseId = exercise.id; save(); renderLive(); });
     const remove = element("button", "live-tab-remove", "×"); remove.type = "button";
     remove.setAttribute("aria-label", `Убрать упражнение: ${exercise.name}`); remove.title = "Убрать упражнение";
     remove.addEventListener("click", () => removeLiveExercise(session, exercise));
