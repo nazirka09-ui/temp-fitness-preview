@@ -1469,6 +1469,78 @@ function initLiveExerciseReordering() {
     save(); renderLive(); nav.querySelector(`[data-exercise-id="${tab.dataset.exerciseId}"]`)?.focus();
   });
 }
+let pastSetCursor = new Map();
+let pastSetsOpen = new Set();
+function pastSetsPanel(session, exercise, history) {
+  const pastSets = element("details", "live-past-sets");
+  const summary = element("summary", "");
+  summary.append(element("span", "live-past-title", "Прошлые подходы"));
+  pastSets.append(summary);
+  if (!history.length) {
+    pastSets.append(element("p", "form-help", "Пока нет выполненных тренировок с этим упражнением."));
+    return pastSets;
+  }
+  const sameGroup = exercise.group && exercise.group !== "Другое" ? history.filter(item => item.group === exercise.group) : history;
+  const entries = sameGroup.length ? sameGroup : history;
+  let index = pastSetCursor.has(exercise.id) ? pastSetCursor.get(exercise.id) : entries.length - 1;
+  index = Math.min(Math.max(0, index), entries.length - 1);
+  const nav = element("div", "live-past-nav");
+  const older = element("button", "live-past-arrow", "←");
+  older.type = "button";
+  older.setAttribute("aria-label", "Более ранняя тренировка");
+  const newer = element("button", "live-past-arrow", "→");
+  newer.type = "button";
+  newer.setAttribute("aria-label", "Более поздняя тренировка");
+  const meta = element("span", "live-past-meta");
+  meta.setAttribute("aria-live", "polite");
+  const dateLabel = element("strong", "");
+  const countLabel = element("small", "");
+  meta.append(dateLabel, countLabel);
+  nav.append(older, meta, newer);
+  const body = element("div", "live-past-body");
+  const paint = () => {
+    pastSetCursor.set(exercise.id, index);
+    const entry = entries[index];
+    const sameDay = entries.filter(item => item.date === entry.date).length > 1;
+    dateLabel.textContent = sameDay && entry.createdAt
+      ? `${formatDate(entry.date)}, ${new Date(entry.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`
+      : formatDate(entry.date);
+    countLabel.textContent = entries.length > 1 ? `${entry.sets.length} подх. · ${index + 1} из ${entries.length}` : `${entry.sets.length} подх.`;
+    older.disabled = index === 0;
+    newer.disabled = index === entries.length - 1;
+    body.replaceChildren();
+    const list = element("ol", "live-past-set-list");
+    entry.sets.forEach(set => {
+      const row = element("li");
+      row.append(element("strong", "", setText(set, isRun(session))));
+      if (set.note) row.append(element("span", "form-help", set.note));
+      if (set.comment) row.append(element("p", "workout-comment", set.comment));
+      list.append(row);
+    });
+    body.append(list);
+    if (entry.comment) body.append(element("p", "workout-comment", entry.comment));
+  };
+  const shift = (event, delta) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const next = index + delta;
+    if (next < 0 || next >= entries.length) return;
+    index = next;
+    paint();
+  };
+  older.addEventListener("click", event => shift(event, -1));
+  newer.addEventListener("click", event => shift(event, 1));
+  for (const arrow of [older, newer]) arrow.addEventListener("pointerdown", event => event.stopPropagation());
+  summary.append(nav);
+  pastSets.addEventListener("toggle", () => {
+    if (pastSets.open) pastSetsOpen.add(exercise.id);
+    else pastSetsOpen.delete(exercise.id);
+  });
+  paint();
+  pastSets.append(body);
+  if (pastSetsOpen.has(exercise.id)) pastSets.open = true;
+  return pastSets;
+}
 function renderLive() {
   const session = liveSession();
   const target = document.querySelector("#live-content");
@@ -1515,25 +1587,7 @@ function renderLive() {
   const previous = history.at(-1);
   const prior = previous ? bestSet(previous.sets) : null;
   const goal = suggestedGoal(history);
-  const pastSets = element("details", "live-past-sets");
-  const pastSummary = element("summary", "", "Прошлые подходы");
-  pastSets.append(pastSummary);
-  if (previous) {
-    const caption = element("p", "form-help", `${formatDate(previous.date)} · ${previous.sets.length} подх.`);
-    const list = element("ol", "live-past-set-list");
-    previous.sets.forEach(set => {
-      const row = element("li");
-      row.append(element("strong", "", setText(set, isRun(session))));
-      if (set.note) row.append(element("span", "form-help", set.note));
-      if (set.comment) row.append(element("p", "workout-comment", set.comment));
-      list.append(row);
-    });
-    pastSets.append(caption, list);
-    if (previous.comment) pastSets.append(element("p", "workout-comment", previous.comment));
-  } else {
-    pastSets.append(element("p", "form-help", "Пока нет выполненных тренировок с этим упражнением."));
-  }
-  target.append(pastSets);
+  target.append(pastSetsPanel(session, exercise, history));
   const completed = element("div", "live-completed");
   exercise.sets.forEach((set, index) => {
     const row = element("div", "live-set-done");
