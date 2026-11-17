@@ -2106,6 +2106,7 @@ document.querySelector("#live-reorder-dismiss").addEventListener("click", () => 
 initNutrition({ data, save, render, today, uid });
 initProgression({ data, today });
 let fullViewportHeight = window.innerHeight;
+let navRevealTimer = 0;
 function keyboardInputFocused() {
   const field = document.activeElement;
   if (!field || field === document.body) return false;
@@ -2116,17 +2117,26 @@ function keyboardInputFocused() {
 function pinMobileNav() {
   const nav = document.querySelector(".mobile-nav");
   if (!nav) return;
-  if (getComputedStyle(nav).position !== "fixed") { nav.style.transform = ""; nav.classList.remove("nav-behind-keyboard"); return; }
   const viewport = window.visualViewport;
   const visibleHeight = viewport ? viewport.height : window.innerHeight;
   if (visibleHeight > fullViewportHeight) fullViewportHeight = visibleHeight;
-  const keyboardOpen = keyboardInputFocused() || fullViewportHeight - visibleHeight > 140;
-  if (keyboardOpen) { nav.classList.add("nav-behind-keyboard"); nav.style.transform = ""; return; }
-  nav.classList.remove("nav-behind-keyboard");
-  const targetBottom = visibleHeight - 10;
-  nav.style.transform = "";
-  const delta = Math.round(targetBottom - nav.getBoundingClientRect().bottom);
-  nav.style.transform = Math.abs(delta) > 1 ? `translate3d(0, ${delta}px, 0)` : "";
+  const keyboardOpen = keyboardInputFocused() || fullViewportHeight - visibleHeight > 120;
+  if (keyboardOpen) {
+    clearTimeout(navRevealTimer);
+    nav.style.setProperty("display", "none", "important");
+    nav.style.transform = "";
+    return;
+  }
+  clearTimeout(navRevealTimer);
+  navRevealTimer = setTimeout(() => {
+    if (keyboardInputFocused()) return;
+    nav.style.removeProperty("display");
+    if (getComputedStyle(nav).position !== "fixed") { nav.style.transform = ""; return; }
+    const bottom = (window.visualViewport ? window.visualViewport.height : window.innerHeight) - 10;
+    nav.style.transform = "";
+    const delta = Math.round(bottom - nav.getBoundingClientRect().bottom);
+    nav.style.transform = Math.abs(delta) > 1 ? `translate3d(0, ${delta}px, 0)` : "";
+  }, 180);
 }
 let navPinFrame = 0;
 function schedulePinNav() { cancelAnimationFrame(navPinFrame); navPinFrame = requestAnimationFrame(pinMobileNav); }
@@ -2148,4 +2158,4 @@ setInterval(() => { renderTimer(); updateLiveDuration(); renderLiveRest(); sched
 initRecordedWorkout();
 initCalendar();
 render(); navigate();
-if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(() => {});
+if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then(registration => registration.update()).catch(() => {});
