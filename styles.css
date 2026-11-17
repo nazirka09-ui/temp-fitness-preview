@@ -104,3 +104,5 @@ body:has(#overview.active) .topbar .eyebrow,body:has(#overview.active) .date-chi
 @media(max-width:720px){.mobile-nav,.workout-navigation .mobile-nav{position:fixed;left:12px;right:12px;bottom:max(10px,env(safe-area-inset-bottom));z-index:50;width:auto;margin:0}}
 
 @media(max-width:720px){.mobile-nav.nav-behind-keyboard{visibility:hidden;pointer-events:none}.live-comment-panel textarea,.live-set-form input,.live-set-form select,.live-set-form textarea{scroll-margin:96px}}
+
+@media(max-width:720px){body:has(textarea:focus) .mobile-nav,body:has(select:focus) .mobile-nav,body:has(input:not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="reset"]):not([type="file"]):not([type="hidden"]):focus) .mobile-nav{display:none!important;visibility:hidden!important}}
