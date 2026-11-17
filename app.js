@@ -2105,14 +2105,25 @@ document.querySelectorAll("[data-timer-stop]").forEach(button => button.addEvent
 document.querySelector("#live-reorder-dismiss").addEventListener("click", () => { localStorage.setItem("temp-reorder-hint-dismissed-v1", "1"); document.querySelector(".live-reorder-hint").hidden = true; });
 initNutrition({ data, save, render, today, uid });
 initProgression({ data, today });
+let fullViewportHeight = window.innerHeight;
+function keyboardInputFocused() {
+  const field = document.activeElement;
+  if (!field || field === document.body) return false;
+  if (field.tagName === "TEXTAREA") return true;
+  if (field.tagName !== "INPUT") return false;
+  return !["button", "checkbox", "radio", "range", "file", "submit", "reset", "color"].includes((field.type || "text").toLowerCase());
+}
 function pinMobileNav() {
   const nav = document.querySelector(".mobile-nav");
   if (!nav) return;
-  if (getComputedStyle(nav).position !== "fixed") { nav.style.transform = ""; return; }
+  if (getComputedStyle(nav).position !== "fixed") { nav.style.transform = ""; nav.classList.remove("nav-behind-keyboard"); return; }
   const viewport = window.visualViewport;
-  const visibleBottom = viewport ? viewport.height : window.innerHeight;
-  const keyboardOpen = viewport && window.innerHeight - viewport.height > 150;
-  const targetBottom = keyboardOpen ? window.innerHeight - viewport.offsetTop - 10 : visibleBottom - 10;
+  const visibleHeight = viewport ? viewport.height : window.innerHeight;
+  if (visibleHeight > fullViewportHeight) fullViewportHeight = visibleHeight;
+  const keyboardOpen = keyboardInputFocused() || fullViewportHeight - visibleHeight > 140;
+  if (keyboardOpen) { nav.classList.add("nav-behind-keyboard"); nav.style.transform = ""; return; }
+  nav.classList.remove("nav-behind-keyboard");
+  const targetBottom = visibleHeight - 10;
   nav.style.transform = "";
   const delta = Math.round(targetBottom - nav.getBoundingClientRect().bottom);
   nav.style.transform = Math.abs(delta) > 1 ? `translate3d(0, ${delta}px, 0)` : "";
@@ -2123,7 +2134,13 @@ window.visualViewport?.addEventListener("resize", schedulePinNav);
 window.visualViewport?.addEventListener("scroll", schedulePinNav);
 window.addEventListener("resize", schedulePinNav);
 window.addEventListener("orientationchange", schedulePinNav);
-window.addEventListener("focusin", () => { schedulePinNav(); setTimeout(pinMobileNav, 350); });
+window.addEventListener("focusin", () => {
+  schedulePinNav();
+  setTimeout(() => {
+    pinMobileNav();
+    if (keyboardInputFocused()) document.activeElement.scrollIntoView({ block: "center", inline: "nearest" });
+  }, 350);
+});
 window.addEventListener("focusout", () => { schedulePinNav(); setTimeout(pinMobileNav, 350); });
 schedulePinNav();
 window.addEventListener("hashchange", navigate);

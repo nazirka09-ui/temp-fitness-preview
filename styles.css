@@ -102,3 +102,5 @@ body:has(#overview.active) .topbar .eyebrow,body:has(#overview.active) .date-chi
 .record-draft-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px}.record-draft-bar p{margin:0}
 
 @media(max-width:720px){.mobile-nav,.workout-navigation .mobile-nav{position:fixed;left:12px;right:12px;bottom:max(10px,env(safe-area-inset-bottom));z-index:50;width:auto;margin:0}}
+
+@media(max-width:720px){.mobile-nav.nav-behind-keyboard{visibility:hidden;pointer-events:none}.live-comment-panel textarea,.live-set-form input,.live-set-form select,.live-set-form textarea{scroll-margin:96px}}
