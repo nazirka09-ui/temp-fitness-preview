@@ -2108,14 +2108,14 @@ initProgression({ data, today });
 function pinMobileNav() {
   const nav = document.querySelector(".mobile-nav");
   if (!nav) return;
-  const root = document.documentElement;
-  if (getComputedStyle(nav).position !== "fixed") { root.style.setProperty("--nav-shift", "0px"); return; }
+  if (getComputedStyle(nav).position !== "fixed") { nav.style.transform = ""; return; }
   const viewport = window.visualViewport;
-  root.style.setProperty("--nav-shift", "0px");
-  const rect = nav.getBoundingClientRect();
-  const layoutBottom = (viewport ? window.innerHeight - viewport.offsetTop : window.innerHeight) - 10;
-  const delta = Math.round(layoutBottom - rect.bottom);
-  root.style.setProperty("--nav-shift", `${Math.abs(delta) > 1 ? delta : 0}px`);
+  const visibleBottom = viewport ? viewport.height : window.innerHeight;
+  const keyboardOpen = viewport && window.innerHeight - viewport.height > 150;
+  const targetBottom = keyboardOpen ? window.innerHeight - viewport.offsetTop - 10 : visibleBottom - 10;
+  nav.style.transform = "";
+  const delta = Math.round(targetBottom - nav.getBoundingClientRect().bottom);
+  nav.style.transform = Math.abs(delta) > 1 ? `translate3d(0, ${delta}px, 0)` : "";
 }
 let navPinFrame = 0;
 function schedulePinNav() { cancelAnimationFrame(navPinFrame); navPinFrame = requestAnimationFrame(pinMobileNav); }
@@ -2127,7 +2127,7 @@ window.addEventListener("focusin", () => { schedulePinNav(); setTimeout(pinMobil
 window.addEventListener("focusout", () => { schedulePinNav(); setTimeout(pinMobileNav, 350); });
 schedulePinNav();
 window.addEventListener("hashchange", navigate);
-setInterval(() => { renderTimer(); updateLiveDuration(); renderLiveRest(); }, 1000);
+setInterval(() => { renderTimer(); updateLiveDuration(); renderLiveRest(); schedulePinNav(); }, 1000);
 initRecordedWorkout();
 initCalendar();
 render(); navigate();
